@@ -1,0 +1,543 @@
+package parser;
+
+// Objetivo: Realizar el analisis sintactico evaluando la secuencia de tokens
+// contra la gramatica definida en el proyecto.
+// Entrada : tokens generados uno a uno por el analizador lexico.
+// Salida  : confirmacion de sintaxis valida o lista de errores con su ubicacion.
+// Restriccion: el parser no se detiene en el primer error.
+// usa producciones 'error' para recuperarse y continuar el analisis.
+
+import scanner.*;
+import java_cup.runtime.*;
+import java.util.*;
+import tabla.TablaManagement;
+
+parser code {:
+
+    // Lista estatica donde se acumulan todos los errores sintacticos encontrados.
+    // Es estatica para que pueda consultarse desde fuera sin necesitar una instancia del parser.
+    private static final List<String> SYNTAX_ERRORS = new ArrayList<>();
+
+    // Tabla de simbolos que se va construyendo a medida que el parser reconoce
+    // declaraciones, funciones y parametros.
+    private TablaManagement tabla = new TablaManagement();
+
+    // Permite que otras clases (como Main) accedan a la tabla de simbolos una vez terminado el analisis.
+    public TablaManagement getTabla() {
+        return tabla;
+    }
+
+    // Vacia la lista de errores sintacticos.
+    public static void resetSyntaxErrors() {
+        SYNTAX_ERRORS.clear();
+    }
+
+    // Retorna una copia de la lista de errores sintacticos para que no pueda modificarse desde afuera.
+    public static List<String> getSyntaxErrors() {
+        return new ArrayList<>(SYNTAX_ERRORS);
+    }
+
+    // Punto de entrada alternativo para probar el parser directamente desde consola,
+    // leyendo el codigo fuente desde la entrada estandar.
+    public static void main(String[] args) throws Exception {
+        Lexer lexer = new Lexer(new java.io.InputStreamReader(System.in));
+        parser p = new parser(lexer);
+        try {
+            Object result = p.parse();
+            System.out.println("Sintaxis correcta");
+        } catch (Exception e) {
+            System.out.println("Error sintactico: " + e.getMessage());
+        }
+    }
+
+    // Registra un error sintactico con su numero de linea cuando esta disponible.
+    // Entrada: mensaje descriptivo del error y el simbolo que lo provoco.
+    // Si no se puede obtener la linea desde el simbolo, se intenta obtenerla directamente del lexer.
+    @Override
+    public void report_error(String message, Object info) {
+        String formatted;
+        int line = -1;
+
+        // Se intenta obtener la linea desde el simbolo que causo el error.
+        if (info instanceof Symbol) {
+            Symbol symbol = (Symbol) info;
+            if (symbol.left > 0) line = symbol.left;
+        }
+
+        // Si el simbolo no tenia informacion de linea, se le pregunta directamente al lexer.
+        if (line == -1) {
+            try {
+                java_cup.runtime.Scanner currentScanner = getScanner();
+                if (currentScanner instanceof scanner.Lexer) {
+                    line = ((scanner.Lexer) currentScanner).getCurrentLine();
+                }
+            } catch (Exception ex) { }
+        }
+
+        if (line > 0) {
+            formatted = "Error sintactico en linea " + line + ": " + message;
+        } else {
+            formatted = "Error sintactico: " + message;
+        }
+
+        SYNTAX_ERRORS.add(formatted);
+        System.err.println(formatted);
+    }
+
+    // Se llama automaticamente cuando el parser encuentra un token que no esperaba.
+    // Construye un mensaje legible con el valor del token inesperado y lo reporta.
+    @Override
+    public void syntax_error(Symbol cur_token) {
+        report_error("token inesperado '" + cur_token.value + "'", cur_token);
+    }
+:};
+
+// ===== TERMINALES =====
+// Son los tokens que el lexer puede producir y que el parser reconoce como hojas de la gramatica.
+
+terminal LEX_ERROR;
+
+// Tipos de datos del lenguaje.
+terminal INT, FLOAT, CHAR, STRING, BOOL, EMPTY, EXPINT_KW, FRAC_KW;
+
+// Palabras reservadas de control de flujo y estructura.
+terminal MAIN, IF, ELSE, BREAK, RETURN, CASE, DEFAULT, SWITCH, WHILE, DO;
+
+// Delimitadores de agrupacion y estructura.
+terminal PAR_I, PAR_D, LLAVE_I, LLAVE_D;
+
+// Operadores de flujo para arreglos y separadores.
+terminal ARR_I, ARR_D, COMMA;
+
+// Puntuacion y operadores de asignacion.
+terminal PYC, ASSIGN, SEP, DOSPUNTOS;
+
+// Operadores aritmeticos.
+terminal PLUS, MINUS, MULT, DIV, MOD, POW;
+
+// Operadores de incremento y decremento.
+terminal INC, DEC;
+
+// Operadores logicos.
+terminal AND, OR, NOT;
+
+// Operadores de comparacion.
+terminal EQUAL, N_EQUAL, LESS_T, LESS_TE, GREATER_T, GREATER_TE;
+
+// Literales booleanos.
+terminal TRUE, FALSE;
+
+// Terminales con valor asociado.
+terminal String ID, NUM, FRAC_LIT, EXPINT_LIT, STRING_LIT, CHAR_LIT;
+
+// Instrucciones de entrada y salida.
+terminal CIN, COUT;
+
+// ===== NO TERMINALES =====
+// Representan las construcciones del lenguaje que se forman combinando terminales y otros no terminales.
+
+non terminal String tipo_retorno;        // tipo que retorna una funcion
+non terminal String tipo;                // tipo de dato en general
+non terminal  programa, funciones, funcion;
+non terminal  main_proc, bloque, cuerpo_funcion, sentencias, sentencia;
+non terminal  condicional, bucle, multi_choice;
+non terminal  lista_casos, caso, default_opt;
+non terminal  entrada, salida, lista_salida ;
+non terminal  declaracion;
+non terminal  declaracion_num, declaracion_scalar, declaracion_num_resto, declaracion_scalar_resto;
+non terminal  asignacion, asignacion_array;
+non terminal  expresion;
+non terminal  expr_logica, expr_conjuncion, expr_negacion;
+non terminal  resto_disyuncion, resto_conjuncion;
+non terminal  comparacion;
+non terminal  expr_igual, expr_n_igual, expr_menor, expr_menor_igual, expr_mayor, expr_mayor_igual;
+non terminal  expr_aritmetica, resto_expresion;
+non terminal  termino, resto_termino;
+non terminal  potencia, resto_potencia;
+non terminal  factor;
+non terminal  unario, atomo_bool;
+non terminal  llamada_funcion, argumentos;
+non terminal  parametros, parametro;
+non terminal  numero, literal_caso;
+non terminal  dimensiones, acceso_array;
+non terminal  filas_init, fila_init, lista_valores;
+
+// ===== PRECEDENCIA Y ASOCIATIVIDAD =====
+// Define como resolver ambiguedades cuando dos operadores compiten por el mismo operando.
+// Los que aparecen mas abajo tienen mayor precedencia.
+precedence left OR;
+precedence left AND;
+precedence left EQUAL, N_EQUAL;
+precedence left LESS_T, LESS_TE, GREATER_T, GREATER_TE;
+precedence left PLUS, MINUS;
+precedence left MULT, DIV, MOD;
+precedence right POW;
+precedence right NOT, INC, DEC;
+
+// ===== PUNTO DE INICIO =====
+start with programa;
+
+// ===== PRODUCCIONES =====
+
+// Un programa puede tener funciones definidas antes del main, o solo el main.
+programa ::= funciones main_proc
+           | main_proc
+           ;
+
+// Una o mas funciones definidas por el usuario antes del bloque principal.
+funciones ::= funciones funcion
+            | funcion
+            ;
+
+// Definicion de una funcion: tipo de retorno, nombre, parametros y cuerpo.
+// Al reconocerla se registra en la tabla de simbolos y se abre un nuevo scope.
+funcion ::= tipo_retorno:t SEP ID:id
+            {:
+                System.err.println("Reconocida funcion: " + id);
+                tabla.insertar(new tabla.Simbolo(id, t, "funcion", idleft, idright, tabla.getScopeActual()));
+                tabla.entrarScope();
+            :}
+            PAR_I parametros PAR_D cuerpo_funcion
+            {: tabla.salirScope(); :}
+          ;
+
+// Tipos de retorno validos para una funcion.
+tipo_retorno ::= INT    {: RESULT = "int";    :}
+               | FLOAT  {: RESULT = "float";  :}
+               | CHAR   {: RESULT = "char";   :}
+               | STRING {: RESULT = "string"; :}
+               | BOOL   {: RESULT = "bool";   :}
+               ;
+
+// Lista de parametros de una funcion: puede estar vacia o tener varios separados por coma.
+parametros ::= parametros COMMA parametro
+             | parametro
+             | /* vacio */
+             ;
+
+// Un parametro individual: tipo, separador y nombre. Se registra en la tabla de simbolos.
+parametro ::= tipo:t SEP ID:id
+            {:
+                tabla.insertar(new tabla.Simbolo(id, t, "parametro", idleft, idright, tabla.getScopeActual()));
+            :}
+            ;
+
+// Bloque principal del programa. Se registra en la tabla y se gestiona su scope.
+main_proc ::= EMPTY SEP MAIN PAR_I PAR_D 
+            {:
+                tabla.insertar(new tabla.Simbolo("__main__", "empty", "funcion", 0, 0, tabla.getScopeActual()));
+                tabla.entrarScope();
+            :}
+              cuerpo_funcion
+            {: tabla.salirScope(); :}
+            ;
+
+// Cuerpo de una funcion: sentencias entre llaves.
+// La primera alternativa con 'error' permite recuperarse si el contenido esta malformado.
+cuerpo_funcion ::= LLAVE_I error LLAVE_D
+                 | LLAVE_I sentencias LLAVE_D
+                 ;
+
+// Bloque de sentencias anidado (como el cuerpo de un if o un while).
+// Abre y cierra un scope propio para las variables declaradas dentro.
+bloque ::= LLAVE_I error LLAVE_D
+         | LLAVE_I 
+         {: tabla.entrarScope(); :} sentencias LLAVE_D {: tabla.salirScope(); :}
+         ;
+
+// Cero o mas sentencias consecutivas.
+sentencias ::= sentencias sentencia
+             | /* vacio */
+             ;
+
+// Una sentencia puede ser cualquiera de las construcciones validas del lenguaje.
+// Las ultimas tres alternativas sirven para recuperarse de errores sin detener el analisis.
+sentencia ::= declaracion
+            | asignacion
+            | asignacion_array
+            | condicional
+            | bucle
+            | multi_choice
+            | BREAK PYC
+            | RETURN SEP expresion PYC
+            | entrada PYC
+            | salida PYC
+            | expresion PYC
+            | LEX_ERROR:e {: report_error("Token lexico invalido: '" + e + "'", new Symbol(sym.LEX_ERROR, eleft, eright, e)); :}
+            | error PYC
+            | error LLAVE_D
+            ;
+
+// Una declaracion puede ser numerica (int, float) o escalar (char, string, bool, etc).
+declaracion ::= declaracion_num
+              | declaracion_scalar
+              ;
+
+// Declaracion de variables enteras o flotantes. Se registran en la tabla de simbolos.
+declaracion_num ::= INT SEP ID:id declaracion_num_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                  | FLOAT SEP ID:id declaracion_num_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                  ;
+
+// Parte final de una declaracion numerica: puede terminar sola, con asignacion,
+// como arreglo bidimensional, o como arreglo con valores iniciales.
+declaracion_num_resto ::= PYC
+                        | ASSIGN expresion PYC
+                        | ARR_I NUM ARR_D ARR_I NUM ARR_D PYC
+                        | ARR_I NUM ARR_D ARR_I NUM ARR_D ASSIGN LLAVE_I filas_init LLAVE_D PYC
+                        ;
+
+// Declaracion de variables de tipo char, string, bool, expint o frac.
+// Cada una se registra en la tabla de simbolos con su tipo correspondiente.
+declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                     | STRING SEP ID:id declaracion_scalar_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                     | BOOL SEP ID:id declaracion_scalar_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                     | EXPINT_KW SEP ID:id declaracion_scalar_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                     | FRAC_KW SEP ID:id declaracion_scalar_resto
+{:
+    tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
+:}
+                     ;
+
+// Parte final de una declaracion escalar: termina sola o con un valor inicial.
+declaracion_scalar_resto ::= PYC
+                           | ASSIGN expresion PYC
+                           ;
+
+// Dimensiones de un arreglo bidimensional: dos indices entre corchetes.
+dimensiones ::= ARR_I NUM ARR_D ARR_I NUM ARR_D;
+
+// Inicializacion de un arreglo bidimensional: lista de filas separadas por coma.
+filas_init ::= filas_init COMMA fila_init
+             | fila_init
+             ;
+
+// Una fila del arreglo: lista de valores entre llaves.
+// La alternativa con 'error' permite recuperarse si el contenido de la fila esta malformado.
+fila_init ::= LLAVE_I lista_valores LLAVE_D
+            | LLAVE_I error LLAVE_D
+            ;
+
+// Lista de valores numericos dentro de una fila, separados por coma.
+lista_valores ::= lista_valores COMMA expr_aritmetica
+                | expr_aritmetica
+                ;
+
+// Asignacion simple: un identificador recibe el valor de una expresion.
+asignacion ::= ID ASSIGN expresion PYC
+             ;
+
+// Asignacion a una posicion especifica de un arreglo bidimensional.
+asignacion_array ::= acceso_array ASSIGN expr_aritmetica PYC
+                   ;
+
+// Acceso a un elemento de un arreglo con dos indices.
+// La segunda alternativa permite recuperarse si los indices estan malformados.
+acceso_array ::= ID ARR_I expr_aritmetica ARR_D ARR_I expr_aritmetica ARR_D
+               | ID ARR_I error ARR_D ARR_I error ARR_D
+               ;
+
+// Estructura condicional: if con o sin else.
+condicional ::= IF SEP PAR_I expresion PAR_D bloque
+              | IF SEP PAR_I expresion PAR_D bloque ELSE SEP bloque
+              ;
+
+// Bucle do-while: ejecuta el bloque al menos una vez antes de evaluar la condicion.
+bucle ::= DO SEP bloque WHILE SEP PAR_I expresion PAR_D PYC
+        ;
+
+// Estructura switch: evalua una expresion y ejecuta el caso que coincida.
+multi_choice ::= SWITCH SEP PAR_I expresion PAR_D LLAVE_I lista_casos default_opt LLAVE_D
+               ;
+
+// Uno o mas casos dentro de un switch.
+lista_casos ::= lista_casos caso
+              | caso
+              ;
+
+// Un caso individual: etiqueta literal y sus sentencias asociadas.
+caso ::= CASE SEP literal_caso DOSPUNTOS sentencias
+       ;
+
+// Caso por defecto opcional al final del switch.
+// TAL VEZ quitarle el SEPARADOR
+default_opt ::= DEFAULT SEP DOSPUNTOS sentencias
+              | /* vacio */
+              ;
+
+// Valores literales validos como etiqueta de un caso: numero, caracter o booleano.
+literal_caso ::= NUM
+               | CHAR_LIT
+               | TRUE
+               | FALSE
+               ;
+
+// Instruccion de entrada: lee desde consola hacia una variable o posicion de arreglo.
+// entrada/CIN Debe permitir las funciones de leer (enteros y flotantes) 
+// No me acuerdo si el profe pidio borrar el de acceso_array por lo que lo comento por ahora
+entrada ::= CIN SEP PAR_I ID PAR_D 
+        ;
+            // CIN SEP acceso_array
+
+// Instruccion de salida: imprime en consola uno o varios elementos.
+// salida estándar/COUT permite :(cadena carácter(es decir un string o bien un solo char), enteros, boolean y flotantes),
+salida ::= COUT SEP PAR_I lista_salida PAR_D
+         ;
+// Lista de elementos a imprimir, separados por coma.
+// lista_salida ::= lista_salida COMMA item_salida
+//               | item_salida
+//               ;
+// Nota: Desd el flex se pasa como token tanto como numero entero como el flotante se pasa como "NUM" por lo que en este caso el terminal NUM corresponde a ambos
+lista_salida ::= STRING_LIT | CHAR_LIT | NUM | atomo_bool | ID
+                ;
+// Un elemento de la lista de salida es cualquier expresion valida.
+// item_salida ::= expresion;
+
+// Una expresion puede ser logica o un literal de cadena de texto.
+expresion ::= expr_logica
+            | STRING_LIT
+            ;
+
+// Expresion logica: conjunciones unidas opcionalmente por OR.
+expr_logica ::= expr_conjuncion resto_disyuncion;
+
+// Parte derecha de una disyuncion: puede continuar con mas OR o terminar.
+resto_disyuncion ::= OR expr_conjuncion resto_disyuncion
+                   | /* vacio */
+                   ;
+
+// Expresion de conjuncion: negaciones unidas opcionalmente por AND.
+expr_conjuncion ::= expr_negacion resto_conjuncion;
+
+// Parte derecha de una conjuncion: puede continuar con mas AND o terminar.
+resto_conjuncion ::= AND expr_negacion resto_conjuncion
+                   | /* vacio */
+                   ;
+
+// Negacion logica: puede aplicarse repetidamente o delegar en una comparacion.
+expr_negacion ::= NOT expr_negacion
+                | comparacion
+                ;
+
+// Una comparacion puede ser cualquiera de los operadores relacionales,
+// una expresion aritmetica sola, o un literal booleano.
+comparacion ::= expr_igual
+              | expr_n_igual
+              | expr_menor
+              | expr_menor_igual
+              | expr_mayor
+              | expr_mayor_igual
+              | expr_aritmetica
+              | atomo_bool
+              ;
+
+// Comparaciones relacionales: cada operador se escribe como palabra clave
+// seguida de dos operandos entre parentesis.
+expr_igual        ::= EQUAL PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D
+                    | EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+
+expr_n_igual      ::= N_EQUAL PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D
+                    | N_EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+
+
+expr_menor        ::= LESS_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
+expr_menor_igual  ::= LESS_TE PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
+expr_mayor        ::= GREATER_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
+expr_mayor_igual  ::= GREATER_TE PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
+
+// Un atomo booleano es True, False, o una expresion logica entre parentesis.
+atomo_bool ::= TRUE
+             | FALSE
+             | PAR_I expr_logica PAR_D 
+             ;
+
+// Expresion aritmetica: terminos unidos por suma o resta.
+expr_aritmetica ::= termino resto_expresion;
+
+// Parte derecha de una suma o resta: puede continuar o terminar.
+resto_expresion ::= PLUS termino resto_expresion
+                  | MINUS termino resto_expresion
+                  | /* vacio */
+                  ;
+
+// Un termino es una potencia seguida opcionalmente de multiplicacion, division o modulo.
+termino ::= potencia resto_termino;
+
+// Parte derecha de un termino: puede continuar con mas operaciones o terminar.
+resto_termino ::= MULT potencia resto_termino
+                | DIV potencia resto_termino
+                | MOD potencia resto_termino
+                | /* vacio */
+                ;
+
+// Una potencia es un factor que puede elevarse a otro factor.
+potencia ::= factor resto_potencia;
+
+// Parte derecha de una potencia: puede encadenarse o terminar.
+resto_potencia ::= POW factor resto_potencia
+                 | /* vacio */
+                 ;
+
+// Un factor es la unidad basica de una expresion aritmetica.
+// Puede ser un valor negado, un numero, un identificador, un caracter,
+// un acceso a arreglo, una llamada a funcion o una expresion entre parentesis.
+factor ::= unario
+         | numero
+         | ID
+         | CHAR_LIT
+         | acceso_array
+         | llamada_funcion
+         | PAR_I expresion PAR_D
+         ;
+
+// Operadores unarios: negacion de numero, incremento o decremento prefijo.
+unario ::= MINUS numero
+         | INC ID
+         | DEC ID
+         ;
+
+// Literales numericos en sus distintos formatos.
+numero ::= NUM
+         | FRAC_LIT
+         | EXPINT_LIT
+
+         ;
+
+// Llamada a una funcion: nombre seguido de argumentos entre parentesis.
+// La segunda alternativa permite recuperarse si los argumentos estan malformados.
+llamada_funcion ::= ID PAR_I argumentos PAR_D
+                  | ID PAR_I error PAR_D
+                  ;
+
+// Lista de argumentos de una llamada: puede estar vacia, tener uno o varios separados por coma.
+argumentos ::= argumentos COMMA expresion
+             | expresion
+             | /* vacio */
+             ;
+
+// Todos los tipos de datos validos en el lenguaje para declaraciones y parametros.
+tipo ::= INT       {: RESULT = "int";    :}
+       | FLOAT     {: RESULT = "float";  :}
+       | CHAR      {: RESULT = "char";   :}
+       | STRING    {: RESULT = "string"; :}
+       | BOOL      {: RESULT = "bool";   :}
+       | EXPINT_KW {: RESULT = "expint"; :}
+       | FRAC_KW   {: RESULT = "frac";   :}
+       ;
