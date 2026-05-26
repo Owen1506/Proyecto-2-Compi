@@ -277,13 +277,13 @@ declaracion ::= declaracion_num
 declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
 
 {:  
-  //  System.out.println(id);
+    System.out.println(dec_num);
     if (tabla.existe(id)){
         System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_INT) " + "Linea:" + idleft +" Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_num != "int"){
+    if (dec_num != "int" && dec_num != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo int |" + " Linea:" + idleft + " Columna: " + idright);
     }
     
@@ -295,7 +295,7 @@ declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
     }else{
         tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_num != "float"){
+    if (dec_num != "float" && dec_num != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo float |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -303,7 +303,7 @@ declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
 
 // Parte final de una declaracion numerica: puede terminar sola, con asignacion,
 // como arreglo bidimensional, o como arreglo con valores iniciales.
-declaracion_num_resto ::= PYC
+declaracion_num_resto ::= PYC {: RESULT = "PYC"; :}
                         | ASSIGN expresion:e1 PYC
                         {: RESULT = e1; :}
                         | ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D PYC
@@ -319,7 +319,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
     }else{
         tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "char"){
+    if (dec_scalar != "char" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo char |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -331,7 +331,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
     }else{
         tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "string"){
+    if (dec_scalar != "string" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo string |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -342,7 +342,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
     }else{
         tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "bool"){
+    if (dec_scalar != "bool" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo bool |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -353,7 +353,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
     }else{
         tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "expint"){
+    if (dec_scalar != "expint" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo expint |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -364,14 +364,14 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
     }else{
         tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "frac"){
+    if (dec_scalar != "frac" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
                      ;
 
 // Parte final de una declaracion escalar: termina sola o con un valor inicial.
-declaracion_scalar_resto ::= PYC
+declaracion_scalar_resto ::= PYC {: RESULT = "PYC"; :}
                            | ASSIGN expresion:e1 PYC
                             {: RESULT = e1; :}
                            ;

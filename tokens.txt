@@ -6,9 +6,9 @@ MAIN         __main__        2        6        Scope 0
 PAR_I        -               2        15       N/A            
 PAR_D        -               2        19       N/A            
 LLAVE_I      -               2        23       N/A            
-FLOAT        -               3        1        N/A            
-SEP          -               3        6        N/A            
-ID           miChar          3        7        Scope 1        
+CHAR         -               3        1        N/A            
+SEP          -               3        5        N/A            
+ID           miChar          3        6        Scope 1        
 ASSIGN       -               3        13       N/A            
 INT_LIT      5               3        16       N/A            
 PYC          -               3        17       N/A            

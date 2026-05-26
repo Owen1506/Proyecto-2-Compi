@@ -1,5 +1,6 @@
 
 empty~__main__ <|  |>  |: 
-	float~miChar<- 5!
+	char~miChar <- 5!
+
  :| 
 

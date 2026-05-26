@@ -1461,13 +1461,13 @@ class CUP$parser$actions {
 		int dec_numright = ((java_cup.runtime.Symbol)CUP$parser$stack.peek()).right;
 		Object dec_num = (Object)((java_cup.runtime.Symbol) CUP$parser$stack.peek()).value;
 		  
-  //  System.out.println(id);
+    System.out.println(dec_num);
     if (tabla.existe(id)){
         System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_INT) " + "Linea:" + idleft +" Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_num != "int"){
+    if (dec_num != "int" && dec_num != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo int |" + " Linea:" + idleft + " Columna: " + idright);
     }
     
@@ -1492,7 +1492,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_num != "float"){
+    if (dec_num != "float" && dec_num != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo float |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1504,7 +1504,7 @@ class CUP$parser$actions {
           case 43: // declaracion_num_resto ::= PYC 
             {
               Object RESULT =null;
-
+		 RESULT = "PYC"; 
               CUP$parser$result = parser.getSymbolFactory().newSymbol("declaracion_num_resto",22, ((java_cup.runtime.Symbol)CUP$parser$stack.peek()), ((java_cup.runtime.Symbol)CUP$parser$stack.peek()), RESULT);
             }
           return CUP$parser$result;
@@ -1555,7 +1555,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "char"){
+    if (dec_scalar != "char" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo char |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1579,7 +1579,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "string"){
+    if (dec_scalar != "string" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo string |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1603,7 +1603,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "bool"){
+    if (dec_scalar != "bool" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo bool |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1627,7 +1627,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "expint"){
+    if (dec_scalar != "expint" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo expint |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1651,7 +1651,7 @@ class CUP$parser$actions {
     }else{
         tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_scalar != "frac"){
+    if (dec_scalar != "frac" && dec_scalar != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + idleft + " Columna: " + idright);
     }
 
@@ -1663,7 +1663,7 @@ class CUP$parser$actions {
           case 52: // declaracion_scalar_resto ::= PYC 
             {
               Object RESULT =null;
-
+		 RESULT = "PYC"; 
               CUP$parser$result = parser.getSymbolFactory().newSymbol("declaracion_scalar_resto",23, ((java_cup.runtime.Symbol)CUP$parser$stack.peek()), ((java_cup.runtime.Symbol)CUP$parser$stack.peek()), RESULT);
             }
           return CUP$parser$result;

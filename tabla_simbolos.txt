@@ -9,4 +9,4 @@ SCOPE: 1
 ------------------------------------------------------
 NOMBRE     TIPO       CATEGORIA    LIN    COL   
 ------------------------------------------------------
-miChar     float      variable     3      7     
+miChar     char       variable     3      6     
