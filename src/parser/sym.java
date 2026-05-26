@@ -8,9 +8,10 @@ package parser;
 /** CUP generated class containing symbol constants. */
 public class sym {
   /* terminals */
-  public static final int EXPINT_LIT = 54;
+  public static final int EXPINT_LIT = 55;
+  public static final int FLOAT_LIT = 53;
   public static final int LESS_TE = 46;
-  public static final int CHAR_LIT = 56;
+  public static final int CHAR_LIT = 57;
   public static final int SEP = 30;
   public static final int DOSPUNTOS = 31;
   public static final int POW = 37;
@@ -29,10 +30,9 @@ public class sym {
   public static final int OR = 41;
   public static final int BOOL = 7;
   public static final int COMMA = 27;
-  public static final int FRAC_LIT = 53;
+  public static final int FRAC_LIT = 54;
   public static final int INC = 38;
   public static final int DIV = 35;
-  public static final int NUM = 52;
   public static final int PLUS = 32;
   public static final int ASSIGN = 29;
   public static final int MAIN = 11;
@@ -46,14 +46,14 @@ public class sym {
   public static final int error = 1;
   public static final int PAR_D = 22;
   public static final int MOD = 36;
-  public static final int CIN = 57;
+  public static final int CIN = 58;
   public static final int BREAK = 14;
   public static final int ARR_I = 25;
   public static final int SWITCH = 18;
   public static final int LEX_ERROR = 2;
   public static final int ARR_D = 26;
   public static final int ELSE = 13;
-  public static final int COUT = 58;
+  public static final int COUT = 59;
   public static final int N_EQUAL = 44;
   public static final int WHILE = 19;
   public static final int DEFAULT = 17;
@@ -64,7 +64,8 @@ public class sym {
   public static final int EXPINT_KW = 9;
   public static final int FALSE = 50;
   public static final int LESS_T = 45;
-  public static final int STRING_LIT = 55;
+  public static final int STRING_LIT = 56;
+  public static final int INT_LIT = 52;
   public static final int DO = 20;
   public static final int PYC = 28;
   public static final String[] terminalNames = new String[] {
@@ -120,7 +121,8 @@ public class sym {
   "TRUE",
   "FALSE",
   "ID",
-  "NUM",
+  "INT_LIT",
+  "FLOAT_LIT",
   "FRAC_LIT",
   "EXPINT_LIT",
   "STRING_LIT",

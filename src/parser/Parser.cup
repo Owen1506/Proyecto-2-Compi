@@ -128,7 +128,7 @@ terminal EQUAL, N_EQUAL, LESS_T, LESS_TE, GREATER_T, GREATER_TE;
 terminal TRUE, FALSE;
 
 // Terminales con valor asociado.
-terminal String ID, NUM, FRAC_LIT, EXPINT_LIT, STRING_LIT, CHAR_LIT;
+terminal String ID, INT_LIT,FLOAT_LIT, FRAC_LIT, EXPINT_LIT, STRING_LIT, CHAR_LIT;
 
 // Instrucciones de entrada y salida.
 terminal CIN, COUT;
@@ -193,7 +193,7 @@ funciones ::= funciones funcion
 // Al reconocerla se registra en la tabla de simbolos y se abre un nuevo scope.
 funcion ::= tipo_retorno:t SEP ID:id
             {:
-                System.err.println("Reconocida funcion: " + id);
+                //System.err.println("Reconocida funcion: " + id);
                 tabla.insertar(new tabla.Simbolo(id, t, "funcion", idleft, idright, tabla.getScopeActual()));
                 tabla.entrarScope();
             :}
@@ -234,15 +234,15 @@ main_proc ::= EMPTY SEP MAIN PAR_I PAR_D
 
 // Cuerpo de una funcion: sentencias entre llaves.
 // La primera alternativa con 'error' permite recuperarse si el contenido esta malformado.
-cuerpo_funcion ::= LLAVE_I error LLAVE_D
-                 | LLAVE_I sentencias LLAVE_D
+cuerpo_funcion ::= LLAVE_I sentencias LLAVE_D
+                 | LLAVE_I error LLAVE_D
                  ;
 
 // Bloque de sentencias anidado (como el cuerpo de un if o un while).
 // Abre y cierra un scope propio para las variables declaradas dentro.
-bloque ::= LLAVE_I error LLAVE_D
-         | LLAVE_I 
+bloque ::=  LLAVE_I
          {: tabla.entrarScope(); :} sentencias LLAVE_D {: tabla.salirScope(); :}
+         | LLAVE_I error LLAVE_D 
          ;
 
 // Cero o mas sentencias consecutivas.
@@ -274,55 +274,110 @@ declaracion ::= declaracion_num
               ;
 
 // Declaracion de variables enteras o flotantes. Se registran en la tabla de simbolos.
-declaracion_num ::= INT SEP ID:id declaracion_num_resto
-{:
-    tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
+declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
+
+{:  
+  //  System.out.println(id);
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_INT) " + "Linea:" + idleft +" Columna: " + idright);
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_num != "int"){
+        System.out.println("Error semantico: Valor asignado no es de tipo int |" + " Linea:" + idleft + " Columna: " + idright);
+    }
+    
 :}
-                  | FLOAT SEP ID:id declaracion_num_resto
+                  | FLOAT SEP ID:id declaracion_num_resto:dec_num
 {:
-    tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_FLOAT)");
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_num != "float"){
+        System.out.println("Error semantico: Valor asignado no es de tipo float |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
                   ;
 
 // Parte final de una declaracion numerica: puede terminar sola, con asignacion,
 // como arreglo bidimensional, o como arreglo con valores iniciales.
 declaracion_num_resto ::= PYC
-                        | ASSIGN expresion PYC
-                        | ARR_I NUM ARR_D ARR_I NUM ARR_D PYC
-                        | ARR_I NUM ARR_D ARR_I NUM ARR_D ASSIGN LLAVE_I filas_init LLAVE_D PYC
+                        | ASSIGN expresion:e1 PYC
+                        {: RESULT = e1; :}
+                        | ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D PYC
+                        | ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D ASSIGN LLAVE_I filas_init LLAVE_D PYC
                         ;
 
 // Declaracion de variables de tipo char, string, bool, expint o frac.
 // Cada una se registra en la tabla de simbolos con su tipo correspondiente.
-declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto
+declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
-    tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_CHAR)");
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_scalar != "char"){
+        System.out.println("Error semantico: Valor asignado no es de tipo char |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
-                     | STRING SEP ID:id declaracion_scalar_resto
+
+                     | STRING SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
-    tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_STRING)");   
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_scalar != "string"){
+        System.out.println("Error semantico: Valor asignado no es de tipo string |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
-                     | BOOL SEP ID:id declaracion_scalar_resto
+                     | BOOL SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
-    tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_BOOL)");
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_scalar != "bool"){
+        System.out.println("Error semantico: Valor asignado no es de tipo bool |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
-                     | EXPINT_KW SEP ID:id declaracion_scalar_resto
+                     | EXPINT_KW SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
-    tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_EXPINT)");
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_scalar != "expint"){
+        System.out.println("Error semantico: Valor asignado no es de tipo expint |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
-                     | FRAC_KW SEP ID:id declaracion_scalar_resto
+                     | FRAC_KW SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
-    tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existe(id)){
+        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_FRAC)");
+    }else{
+        tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
+    }
+    if (dec_scalar != "frac"){
+        System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + idleft + " Columna: " + idright);
+    }
 :}
                      ;
 
 // Parte final de una declaracion escalar: termina sola o con un valor inicial.
 declaracion_scalar_resto ::= PYC
-                           | ASSIGN expresion PYC
+                           | ASSIGN expresion:e1 PYC
+                            {: RESULT = e1; :}
                            ;
 
 // Dimensiones de un arreglo bidimensional: dos indices entre corchetes.
-dimensiones ::= ARR_I NUM ARR_D ARR_I NUM ARR_D;
+dimensiones ::= ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D;
 
 // Inicializacion de un arreglo bidimensional: lista de filas separadas por coma.
 filas_init ::= filas_init COMMA fila_init
@@ -341,7 +396,12 @@ lista_valores ::= lista_valores COMMA expr_aritmetica
                 ;
 
 // Asignacion simple: un identificador recibe el valor de una expresion.
-asignacion ::= ID ASSIGN expresion PYC
+asignacion ::= ID:id ASSIGN expresion PYC
+            {:
+                if (tabla.existe(id) == false){
+                    System.out.println("*****Este identificador no ha sido declarado (Produccion asignacion)");
+                }
+            :}
              ;
 
 // Asignacion a una posicion especifica de un arreglo bidimensional.
@@ -383,7 +443,7 @@ default_opt ::= DEFAULT SEP DOSPUNTOS sentencias
               ;
 
 // Valores literales validos como etiqueta de un caso: numero, caracter o booleano.
-literal_caso ::= NUM
+literal_caso ::= numero
                | CHAR_LIT
                | TRUE
                | FALSE
@@ -405,18 +465,26 @@ salida ::= COUT SEP PAR_I lista_salida PAR_D
 //               | item_salida
 //               ;
 // Nota: Desd el flex se pasa como token tanto como numero entero como el flotante se pasa como "NUM" por lo que en este caso el terminal NUM corresponde a ambos
-lista_salida ::= STRING_LIT | CHAR_LIT | NUM | atomo_bool | ID
+lista_salida ::= STRING_LIT | CHAR_LIT | numero | atomo_bool | ID
                 ;
 // Un elemento de la lista de salida es cualquier expresion valida.
 // item_salida ::= expresion;
 
 // Una expresion puede ser logica o un literal de cadena de texto.
-expresion ::= expr_logica
-            | STRING_LIT
+expresion ::= expr_logica:expr_log
+            {: 
+            RESULT = expr_log;
+            :}
+            | STRING_LIT 
+            {: 
+            RESULT = "string"; 
+            :}
             ;
 
 // Expresion logica: conjunciones unidas opcionalmente por OR.
-expr_logica ::= expr_conjuncion resto_disyuncion;
+expr_logica ::= expr_conjuncion:expr_conj resto_disyuncion
+            {: RESULT = expr_conj; :}
+            ;
 
 // Parte derecha de una disyuncion: puede continuar con mas OR o terminar.
 resto_disyuncion ::= OR expr_conjuncion resto_disyuncion
@@ -424,7 +492,9 @@ resto_disyuncion ::= OR expr_conjuncion resto_disyuncion
                    ;
 
 // Expresion de conjuncion: negaciones unidas opcionalmente por AND.
-expr_conjuncion ::= expr_negacion resto_conjuncion;
+expr_conjuncion ::= expr_negacion:expr_neg resto_conjuncion
+                {: RESULT = expr_neg; :}
+                ;
 
 // Parte derecha de una conjuncion: puede continuar con mas AND o terminar.
 resto_conjuncion ::= AND expr_negacion resto_conjuncion
@@ -433,7 +503,8 @@ resto_conjuncion ::= AND expr_negacion resto_conjuncion
 
 // Negacion logica: puede aplicarse repetidamente o delegar en una comparacion.
 expr_negacion ::= NOT expr_negacion
-                | comparacion
+                | comparacion:comp 
+                {: RESULT = comp; :}
                 ;
 
 // Una comparacion puede ser cualquiera de los operadores relacionales,
@@ -444,17 +515,18 @@ comparacion ::= expr_igual
               | expr_menor_igual
               | expr_mayor
               | expr_mayor_igual
-              | expr_aritmetica
+              | expr_aritmetica:expr_arit
+              {: RESULT = expr_arit; :}
               | atomo_bool
               ;
 
 // Comparaciones relacionales: cada operador se escribe como palabra clave
 // seguida de dos operandos entre parentesis.
-expr_igual        ::= EQUAL PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D
-                    | EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+expr_igual        ::= EQUAL PAR_I expr_logica COMMA expr_logica PAR_D;
+                   // | EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
 
-expr_n_igual      ::= N_EQUAL PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D
-                    | N_EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+expr_n_igual      ::= N_EQUAL PAR_I expr_logica COMMA expr_logica PAR_D;
+                   // | N_EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
 
 
 expr_menor        ::= LESS_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
@@ -469,7 +541,10 @@ atomo_bool ::= TRUE
              ;
 
 // Expresion aritmetica: terminos unidos por suma o resta.
-expr_aritmetica ::= termino resto_expresion;
+expr_aritmetica ::= termino:term  resto_expresion
+                {: RESULT = term; :}
+                ;
+
 
 // Parte derecha de una suma o resta: puede continuar o terminar.
 resto_expresion ::= PLUS termino resto_expresion
@@ -478,7 +553,9 @@ resto_expresion ::= PLUS termino resto_expresion
                   ;
 
 // Un termino es una potencia seguida opcionalmente de multiplicacion, division o modulo.
-termino ::= potencia resto_termino;
+termino ::= potencia:pot resto_termino
+        {: RESULT = pot; :}
+        ;
 
 // Parte derecha de un termino: puede continuar con mas operaciones o terminar.
 resto_termino ::= MULT potencia resto_termino
@@ -488,7 +565,9 @@ resto_termino ::= MULT potencia resto_termino
                 ;
 
 // Una potencia es un factor que puede elevarse a otro factor.
-potencia ::= factor resto_potencia;
+potencia ::= factor:fact resto_potencia
+        {: RESULT = fact; :}
+         ;
 
 // Parte derecha de una potencia: puede encadenarse o terminar.
 resto_potencia ::= POW factor resto_potencia
@@ -499,12 +578,14 @@ resto_potencia ::= POW factor resto_potencia
 // Puede ser un valor negado, un numero, un identificador, un caracter,
 // un acceso a arreglo, una llamada a funcion o una expresion entre parentesis.
 factor ::= unario
-         | numero
+         | numero: numero1 {: 
+         System.out.println("Entro en produccion factor-numero;");
+         RESULT = numero1; :}
          | ID
-         | CHAR_LIT
+         | CHAR_LIT:char1 {: RESULT = char1; :}
          | acceso_array
          | llamada_funcion
-         | PAR_I expresion PAR_D
+         | PAR_I expr_aritmetica PAR_D
          ;
 
 // Operadores unarios: negacion de numero, incremento o decremento prefijo.
@@ -514,7 +595,8 @@ unario ::= MINUS numero
          ;
 
 // Literales numericos en sus distintos formatos.
-numero ::= NUM
+numero ::= INT_LIT:int_l {: RESULT = "int"; :}
+         | FLOAT_LIT:float_l {: RESULT = "float"; :}
          | FRAC_LIT
          | EXPINT_LIT
 

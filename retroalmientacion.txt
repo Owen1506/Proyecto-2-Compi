@@ -33,7 +33,7 @@ Manejo de tipos (declaración, asignación)	            5	5 Listo.	fraccionario 
 Manejo de arreglos (declaración, asignación)	        2	2	 
 Manejo de expresiones binarias (cadena)	                4	4	 
 Manejo de expresiones unarias (cadena)	                2	2	 
-Manejo de expresiones relacionales	                    3.5	3	equal y notequal deben funcionar con expresion booleana en general (id,literal,funcion,opRelacional)
+Manejo de expresiones relacionales	                    3.5	3	Listo . equal y notequal deben funcionar con expresion booleana en general (id,literal,funcion,opRelacional)
 Manejo de expresiones lógicas	                        3	3	 
 Manejo estructuras de control	                        5.5	5.5	 
 Print y read	                                        2	1.5	Listo en teoria. cout una sola salida y da error con literal string

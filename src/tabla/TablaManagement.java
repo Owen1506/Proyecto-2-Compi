@@ -35,7 +35,6 @@ public class TablaManagement {
     // Abre un nuevo nivel de scope, por ejemplo al entrar a una funcion o a un bloque.
     // Crea una tabla nueva y la coloca en la cima de la pila.
     public void entrarScope() {
-        System.out.println("Entrando en scope");
         pilaScopes.push(new Tabla(contadorScopes++));
     }
 

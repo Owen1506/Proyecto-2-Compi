@@ -43,7 +43,7 @@ public class Main {
             Lexer lexer = new Lexer(fileReader);
             parser p = new parser(lexer); // SOLO UNO
 
-            System.out.println("Iniciando analisis...");
+         //   System.out.println("Iniciando analisis...");
             System.out.println("Archivo de entrada: " + sourceFile);
 
             try {
@@ -73,8 +73,8 @@ public class Main {
                 }
 
                 // Se muestra y guarda la tabla de simbolos construida durante el analisis.
-                System.out.println("\n=== TABLA DE SIMBOLOS ===");
-                p.getTabla().imprimirHistorial();
+                //System.out.println("\n=== TABLA DE SIMBOLOS ===");
+               // p.getTabla().imprimirHistorial();
                 p.getTabla().exportarTXT("tabla_simbolos.txt");
 
             } finally {

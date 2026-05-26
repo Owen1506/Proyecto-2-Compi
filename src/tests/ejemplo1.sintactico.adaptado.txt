@@ -58,7 +58,8 @@ Comentario 1
 	miFunc <| miFunc <|  |> ,'a' |> ! ¡¡semantico miFunc, hola
 	bool~bl0 <- n_equal<|6.7 , 8//9 |>! ¡¡ok
 	
-	bl0<- $<| n_equal <| true , <| equal <| 1+1,2*2 |> |> |> |> ! ¡¡ok
+	bl0<- $<| n_equal <| true , greather_t<|in1 , fl1 |> # false  |> |> ! ¡¡ok
+	bl0<- $<| equal <| true , <| n_equal <| 1+1,2*2 |> |> |> |> ! ¡¡ok
 	bool~bl1 <- greather_t<|in1 , fl1 |> # false @ $ <| greather_te<|func2 <| 3,in1 |> , 56 |> |> ! ¡¡semantico in1 ><- fl1, func2
 	return~bl1! ¡¡semantico
  :| 

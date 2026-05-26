@@ -160,7 +160,7 @@ FloatN = {IntN}"."{Digito}+
 ExpN = {IntN}[eE]{EnteroNoCero}{Digito}*
 
 // Numero fraccionario en formato numerador/denominador (ej: 3/4).
-FraccionarioN = {EnteroNoCero}{Digito}*"//"{EnteroNoCero}{Digito}*
+FraccionarioN = -?{EnteroNoCero}{Digito}*"//"{EnteroNoCero}{Digito}*
 
 // Cadena de texto entre comillas dobles, con soporte para secuencias de escape.
 StringLiteral = \"([^\"\\\r\n]|\\.)*\"
@@ -271,8 +271,8 @@ BlockComment = "{-"([^\-]|-+[^}])*"-}"
 // El orden importa: se evaluan de mas especifico a mas general para evitar conflictos.
 {FraccionarioN} { addToken("FRAC_LIT", yytext()); return new Symbol(sym.FRAC_LIT, yyline+1, yycolumn, yytext()); }
 {ExpN}          { addToken("EXPINT_LIT", yytext()); return new Symbol(sym.EXPINT_LIT, yyline+1, yycolumn, yytext()); }
-{FloatN}        { addToken("NUM", yytext()); return new Symbol(sym.NUM, yyline+1, yycolumn, yytext()); }
-{IntN}          { addToken("NUM", yytext()); return new Symbol(sym.NUM, yyline+1, yycolumn, yytext()); }
+{FloatN}        { addToken("FLOAT_LIT", yytext()); return new Symbol(sym.FLOAT_LIT, yyline+1, yycolumn, yytext()); }
+{IntN}          { addToken("INT_LIT", yytext()); return new Symbol(sym.INT_LIT, yyline+1, yycolumn, yytext()); }
 
 // Literales de texto: se eliminan las comillas antes de guardar el contenido real.
 {StringLiteral} { 
