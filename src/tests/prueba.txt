@@ -1,6 +1,11 @@
+string~_func3_  <|  |>   |:  ¡¡semantico string
+	string~_b1_!
+	return~"a"! 
+
+  :| 
 
 empty~__main__ <|  |>  |: 
-	char~miChar <- 5!
-
+	float~asdasd!
+	int~arr<<5>><<67>> <- |:	  |: 2 :| , |: 2 :|  :| !
+	arr<<0>><<asdasd>> <- 5!
  :| 
-

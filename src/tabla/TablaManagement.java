@@ -74,7 +74,26 @@ public class TablaManagement {
         }
         return null;
     }
+    public Simbolo buscarSimboloFuncion() {
 
+        // Recorre desde el scope actual hacia afuera
+        for (int i = pilaScopes.size() - 1; i >= 0; i--) {
+
+            Tabla t = pilaScopes.get(i);
+
+            // Recorre los simbolos del scope
+            for (Simbolo s : t.obtenerSimbolos()) {
+
+                // Si encuentra una funcion, retorna esa
+                if (s.categoria.equals("funcion")) {
+                    return s;
+                }
+            }
+        }
+
+        // No se encontro ninguna funcion
+        return null;
+    }
     // Busca un simbolo en el historial completo, recorriendolo desde el final hacia el inicio.
     // Util para encontrar el scope en que fue declarado un identificador incluso si su tabla ya fue desapilada.
     // Entrada : nombre del identificador a buscar.
@@ -94,6 +113,24 @@ public class TablaManagement {
     public boolean existe(String nombre) {
         return buscarSimbolo(nombre) != null;
     }
+
+    public boolean existeEnScope(String nombre, int scope) {
+
+        // Recorre todos los scopes activos
+        for (Tabla t : pilaScopes) {
+
+            // Verifica si es el scope solicitado
+            if (t.getIdScope() == scope) {
+
+                // Busca el identificador dentro de ese scope
+                return t.existe(nombre);
+            }
+        }
+
+        // Si no encontro el scope o el simbolo
+        return false;
+    }
+
 
     // Retorna el identificador numerico del scope en el que se esta trabajando ahora mismo.
     public int getScopeActual() {
