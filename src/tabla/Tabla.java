@@ -44,6 +44,9 @@ public class Tabla {
         return simbolos.get(nombre);
     }
 
+    public java.util.Collection<Simbolo> obtenerSimbolos() {
+        return simbolos.values();
+    }
     // Retorna el identificador numerico del scope de esta tabla.
     public int getIdScope() {
         return idScope;

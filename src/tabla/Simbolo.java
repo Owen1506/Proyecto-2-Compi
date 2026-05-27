@@ -36,15 +36,19 @@ public class Simbolo {
         this.scope = scope;
     }
 
+    public String getCategoria(){
+        return categoria;
+    }
     // Retorna el nivel de scope en que fue declarado este simbolo.
     // Lo usan otras clases para saber si un simbolo es accesible desde el contexto actual.
     public int getScope() { return scope; }
-
+    
+    public String getTipo() { return tipo; }
     // Genera una representacion legible del simbolo para imprimirla en consola o exportarla.
     // Incluye scope, nombre, tipo, categoria, linea y columna en un formato de una sola linea.
     public String toString() {
         return String.format(
-            "[Scope %d] Nombre: %s : Tipo: %s Categoria: %s  Linea:%d Columna:%d",
+            "[Scope %d] Nombre: %s : Tipo: %s Categoria: %s  Linea:%d Columna:%d ",
             scope,
             nombre,
             tipo,

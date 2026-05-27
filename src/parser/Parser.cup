@@ -11,7 +11,7 @@ import scanner.*;
 import java_cup.runtime.*;
 import java.util.*;
 import tabla.TablaManagement;
-
+import tabla.Simbolo;
 parser code {:
 
     // Lista estatica donde se acumulan todos los errores sintacticos encontrados.
@@ -136,15 +136,15 @@ terminal CIN, COUT;
 // ===== NO TERMINALES =====
 // Representan las construcciones del lenguaje que se forman combinando terminales y otros no terminales.
 
-non terminal String tipo_retorno;        // tipo que retorna una funcion
-non terminal String tipo;                // tipo de dato en general
+non terminal  String tipo_retorno;        // tipo que retorna una funcion
+non terminal  String tipo;                // tipo de dato en general
 non terminal  programa, funciones, funcion;
 non terminal  main_proc, bloque, cuerpo_funcion, sentencias, sentencia;
 non terminal  condicional, bucle, multi_choice;
 non terminal  lista_casos, caso, default_opt;
 non terminal  entrada, salida, lista_salida ;
 non terminal  declaracion;
-non terminal  declaracion_num, declaracion_scalar, declaracion_num_resto, declaracion_scalar_resto;
+non terminal  declaracion_num, declaracion_scalar, declaracion_num_resto,declaracion_num_resto_float, declaracion_num_resto_int, declaracion_scalar_resto;
 non terminal  asignacion, asignacion_array;
 non terminal  expresion;
 non terminal  expr_logica, expr_conjuncion, expr_negacion;
@@ -193,9 +193,12 @@ funciones ::= funciones funcion
 // Al reconocerla se registra en la tabla de simbolos y se abre un nuevo scope.
 funcion ::= tipo_retorno:t SEP ID:id
             {:
-                //System.err.println("Reconocida funcion: " + id);
-                tabla.insertar(new tabla.Simbolo(id, t, "funcion", idleft, idright, tabla.getScopeActual()));
-                tabla.entrarScope();
+                if (tabla.existe(id)){
+                    System.out.println("Error semantico: Esta funcion ya existe | "+ " Linea:" + idleft + " Columna: " + idright );
+                }else{
+                    tabla.insertar(new tabla.Simbolo(id, t, "funcion", idleft, idright, tabla.getScopeActual()));
+                    tabla.entrarScope();
+                }
             :}
             PAR_I parametros PAR_D cuerpo_funcion
             {: tabla.salirScope(); :}
@@ -210,8 +213,10 @@ tipo_retorno ::= INT    {: RESULT = "int";    :}
                ;
 
 // Lista de parametros de una funcion: puede estar vacia o tener varios separados por coma.
-parametros ::= parametros COMMA parametro
-             | parametro
+parametros ::= parametros COMMA parametro {: //System.out.println("ENTRA EN PARAMETRO"); 
+:}
+             | parametro  {: //System.out.println("ENTRA EN PARAMETRO"); 
+             :}
              | /* vacio */
              ;
 
@@ -259,10 +264,12 @@ sentencia ::= declaracion
             | bucle
             | multi_choice
             | BREAK PYC
-            | RETURN SEP expresion PYC
+            | RETURN SEP expresion:e1 PYC {: if(e1 != tabla.buscarSimboloFuncion().getTipo()){ 
+               System.out.println("Error semantico: Tipo del return diferente al de funcion | " + " Linea:" + e1left + " Columna: " + e1right); 
+            } :}
             | entrada PYC
             | salida PYC
-            | expresion PYC
+            | expresion:e1 PYC
             | LEX_ERROR:e {: report_error("Token lexico invalido: '" + e + "'", new Symbol(sym.LEX_ERROR, eleft, eright, e)); :}
             | error PYC
             | error LLAVE_D
@@ -274,12 +281,11 @@ declaracion ::= declaracion_num
               ;
 
 // Declaracion de variables enteras o flotantes. Se registran en la tabla de simbolos.
-declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
+declaracion_num ::= INT SEP ID:id declaracion_num_resto_int:dec_num
 
 {:  
-    System.out.println(dec_num);
-    if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_INT) " + "Linea:" + idleft +" Columna: " + idright);
+    if (tabla.existeEnScope(id,tabla.getScopeActual()) && tabla.buscarSimbolo(id).getCategoria() != "parametro" ){
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_num_INT) | " + "Linea:" + idleft +" Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
     }
@@ -288,14 +294,14 @@ declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
     }
     
 :}
-                  | FLOAT SEP ID:id declaracion_num_resto:dec_num
+                  | FLOAT SEP ID:id declaracion_num_resto_float:dec_num_float
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_num_FLOAT)");
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_num_FLOAT) | " + " Linea:" + idleft + " Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
     }
-    if (dec_num != "float" && dec_num != "PYC"){
+    if (dec_num_float != "float" && dec_num_float != "PYC"){
         System.out.println("Error semantico: Valor asignado no es de tipo float |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
@@ -303,11 +309,60 @@ declaracion_num ::= INT SEP ID:id declaracion_num_resto:dec_num
 
 // Parte final de una declaracion numerica: puede terminar sola, con asignacion,
 // como arreglo bidimensional, o como arreglo con valores iniciales.
-declaracion_num_resto ::= PYC {: RESULT = "PYC"; :}
+declaracion_num_resto_int ::= PYC {: RESULT = "PYC"; :}
                         | ASSIGN expresion:e1 PYC
                         {: RESULT = e1; :}
-                        | ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D PYC
-                        | ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D ASSIGN LLAVE_I filas_init LLAVE_D PYC
+                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D PYC 
+                        {: //Aca no puedo pasar que el result es de tipo int porque el identificador que se definio antes en dec_num puede ser tipo float o int
+                            if (num1 != "int"){
+                                System.out.println(" Arr dec Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            }
+                            if (num2 != "int"){
+                                System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            }
+                            RESULT = "int";
+                        :}
+                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
+                        {: 
+                            if (num1 != "int"){
+                                System.out.println(" ARr dec asig Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            }
+                            if (num2 != "int"){
+                                System.out.println("Arr dec asig Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            }
+                            if (_filas_init != "int"){
+                                System.out.println("Error semantico: Valor asignado no es de tipo int (Produccion declacion_num_resto_int) |" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
+                            }
+                            RESULT = "int";
+                        :}
+                        ;
+declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
+                        | ASSIGN expresion:e1 PYC
+                        {: RESULT = e1; :}
+                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D PYC 
+                        {: //Aca no puedo pasar que el result es de tipo int porque el identificador que se definio antes en dec_num puede ser tipo float o int
+                            if (num1 != "int"){
+                                System.out.println(" Arr dec Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            }
+                            if (num2 != "int"){
+                                System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            }
+                            RESULT = "float";
+                        :}
+                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
+                        {: 
+                            if (num1 != "int"){
+                                System.out.println(" ARr dec asig Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            }
+                            if (num2 != "int"){
+                                System.out.println("Arr dec asig Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            }
+                            //Aca validar que lo que trae filas_init etc sea float.
+                            if (_filas_init != "float"){
+                                System.out.println("Error semantico: Valor asignado no es de tipo float (Produccion declacion_num_resto_float)|" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
+                            }                            
+                            RESULT = "float";
+                        :}
                         ;
 
 // Declaracion de variables de tipo char, string, bool, expint o frac.
@@ -315,7 +370,7 @@ declaracion_num_resto ::= PYC {: RESULT = "PYC"; :}
 declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_CHAR)");
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_CHAR) | " + " Linea:" + idleft + " Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
     }
@@ -323,11 +378,10 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
         System.out.println("Error semantico: Valor asignado no es de tipo char |" + " Linea:" + idleft + " Columna: " + idright);
     }
 :}
-
                      | STRING SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_STRING)");   
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_STRING) | " + " Linea:" + idleft + " Columna: " + idright);   
     }else{
         tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
     }
@@ -338,7 +392,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
                      | BOOL SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_BOOL)");
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_BOOL) |" + " Linea:" + idleft + " Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
     }
@@ -349,7 +403,7 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
                      | EXPINT_KW SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_EXPINT)");
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_EXPINT) |" + " Linea:" + idleft + " Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
     }
@@ -360,12 +414,12 @@ declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
                      | FRAC_KW SEP ID:id declaracion_scalar_resto:dec_scalar
 {:
     if (tabla.existe(id)){
-        System.out.println("*****Este identificador ya esta declarado (Produccion declaracion_escalar_FRAC)");
+        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_FRAC) |" + " Linea:" + idleft + " Columna: " + idright);
     }else{
         tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
     }
     if (dec_scalar != "frac" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + idleft + " Columna: " + idright);
+        System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + dec_scalarleft + " Columna: " + dec_scalarright);
     }
 :}
                      ;
@@ -377,46 +431,98 @@ declaracion_scalar_resto ::= PYC {: RESULT = "PYC"; :}
                            ;
 
 // Dimensiones de un arreglo bidimensional: dos indices entre corchetes.
-dimensiones ::= ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D;
+dimensiones ::= ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D; //*** ESTA NO SE USA
 
 // Inicializacion de un arreglo bidimensional: lista de filas separadas por coma.
-filas_init ::= filas_init COMMA fila_init
-             | fila_init
+filas_init ::= filas_init:_filas_init COMMA fila_init:_fila_init
+{:
+    if(_filas_init.equals("error") || _fila_init.equals("error")){
+        RESULT = "error";
+    }
+    else if(!_filas_init.equals(_fila_init)){
+        System.out.println("Error semantico: ");
+        RESULT = "error";
+    }
+    else{
+        RESULT = _filas_init;
+    }
+:}
+             | fila_init:_fila_init
+{:
+    RESULT = _fila_init;
+:}
              ;
 
 // Una fila del arreglo: lista de valores entre llaves.
 // La alternativa con 'error' permite recuperarse si el contenido de la fila esta malformado.
-fila_init ::= LLAVE_I lista_valores LLAVE_D
+fila_init ::= LLAVE_I lista_valores:_lista_valores LLAVE_D {: RESULT = _lista_valores; :}
             | LLAVE_I error LLAVE_D
             ;
 
 // Lista de valores numericos dentro de una fila, separados por coma.
-lista_valores ::= lista_valores COMMA expr_aritmetica
-                | expr_aritmetica
-                ;
+lista_valores ::= lista_valores:_lista_valores COMMA expr_aritmetica:expr_arit
+{:
+    if(_lista_valores.equals("error") || expr_arit.equals("error")){
+        RESULT = "error";
+    }
+    else if(!_lista_valores.equals(expr_arit)){
+        System.out.println("Error semantico: ");
+        RESULT = "error";
+    }
+    else{
+        RESULT = _lista_valores;
+    }
+:}
+
+| expr_aritmetica:expr_arit
+{:
+    RESULT = expr_arit;
+:}
+;
 
 // Asignacion simple: un identificador recibe el valor de una expresion.
-asignacion ::= ID:id ASSIGN expresion PYC
+asignacion ::= ID:id ASSIGN expresion:e1 PYC
             {:
+                if (tabla.existe(id) == true && tabla.existeEnScope(id,tabla.getScopeActual()) == false){
+                    System.out.println("Error semantico: Este identificador no existe en este scope (Produccion asignacion) | " + " Linea:" + idleft + " Columna: " + idright);
+                }
                 if (tabla.existe(id) == false){
-                    System.out.println("*****Este identificador no ha sido declarado (Produccion asignacion)");
+                    System.out.println("Error semantico: Este identificador no existe(Produccion asignacion) | " + " Linea:" + idleft + " Columna: " + idright);
+                }
+                if (tabla.buscarSimbolo(id).getTipo() != e1){
+                    System.out.println("Error semantico: Tipo a asignar no es el mismo que el declarado (Produccion asignacion) | " + " Linea:" + e1left + " Columna: " + e1right);     
                 }
             :}
              ;
 
 // Asignacion a una posicion especifica de un arreglo bidimensional.
-asignacion_array ::= acceso_array ASSIGN expr_aritmetica PYC
+asignacion_array ::= acceso_array:acc_array ASSIGN expr_aritmetica:expr_arit PYC 
+                {:  
+                    if(acc_array != expr_arit){
+                        System.out.println("Error semantico en asignacion_array: El tipo del dato a asignar no coincide con el tipo del arreglo");
+                    }
+                :}
                    ;
 
 // Acceso a un elemento de un arreglo con dos indices.
 // La segunda alternativa permite recuperarse si los indices estan malformados.
-acceso_array ::= ID ARR_I expr_aritmetica ARR_D ARR_I expr_aritmetica ARR_D
-               | ID ARR_I error ARR_D ARR_I error ARR_D
+
+acceso_array ::= ID:id ARR_I expr_aritmetica:expr_arit ARR_D ARR_I expr_aritmetica:expr_arit2 ARR_D 
+{:
+    if (expr_arit != "int"){
+        System.out.println("Error semantico: indice 1 no es de tipo entero ");
+    }
+    if (expr_arit2 != "int"){
+        System.out.println("Error semantico: indice 2 no es de tipo entero");
+    }
+ RESULT = tabla.buscarSimbolo(id).getTipo();  :}
+               | ID:id ARR_I error ARR_D ARR_I error ARR_D 
                ;
 
 // Estructura condicional: if con o sin else.
-condicional ::= IF SEP PAR_I expresion PAR_D bloque
-              | IF SEP PAR_I expresion PAR_D bloque ELSE SEP bloque
+//expresion aca debe ser tipo bool
+condicional ::= IF SEP PAR_I expresion:e1 PAR_D bloque {::}
+              | IF SEP PAR_I expresion:e1 PAR_D bloque ELSE SEP bloque {::} 
               ;
 
 // Bucle do-while: ejecuta el bloque al menos una vez antes de evaluar la condicion.
@@ -515,9 +621,8 @@ comparacion ::= expr_igual
               | expr_menor_igual
               | expr_mayor
               | expr_mayor_igual
-              | expr_aritmetica:expr_arit
-              {: RESULT = expr_arit; :}
-              | atomo_bool
+              | expr_aritmetica:expr_arit {: RESULT = expr_arit; :}
+              | atomo_bool:atomo_b {: RESULT = atomo_b; :}
               ;
 
 // Comparaciones relacionales: cada operador se escribe como palabra clave
@@ -535,9 +640,9 @@ expr_mayor        ::= GREATER_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_
 expr_mayor_igual  ::= GREATER_TE PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
 
 // Un atomo booleano es True, False, o una expresion logica entre parentesis.
-atomo_bool ::= TRUE
-             | FALSE
-             | PAR_I expr_logica PAR_D 
+atomo_bool ::= TRUE {: RESULT = "bool"; :}
+             | FALSE {: RESULT = "bool"; :}
+             | PAR_I expr_logica:expr_log PAR_D {: RESULT = expr_log; :} 
              ;
 
 // Expresion aritmetica: terminos unidos por suma o resta.
@@ -579,10 +684,20 @@ resto_potencia ::= POW factor resto_potencia
 // un acceso a arreglo, una llamada a funcion o una expresion entre parentesis.
 factor ::= unario
          | numero: numero1 {: 
-         System.out.println("Entro en produccion factor-numero;");
+         
          RESULT = numero1; :}
-         | ID
-         | CHAR_LIT:char1 {: RESULT = char1; :}
+         | ID:id 
+        {: 
+            Simbolo s = tabla.buscarSimbolo(id);
+
+            if(s != null){
+                RESULT = s.getTipo();
+            } else {
+                System.out.println("Error semantico: variable no declarada");
+                RESULT = "error";
+            }
+        :}
+         | CHAR_LIT:char1 {: RESULT = "char"; :}
          | acceso_array
          | llamada_funcion
          | PAR_I expr_aritmetica PAR_D
