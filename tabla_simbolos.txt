@@ -3,10 +3,19 @@ SCOPE: 0
 ------------------------------------------------------
 NOMBRE     TIPO       CATEGORIA    LIN    COL   
 ------------------------------------------------------
-__main__   empty      funcion      0      0     
+_func3_    int        funcion      1      4     
+__main__   empty      funcion      23     6     
 
 SCOPE: 1
 ------------------------------------------------------
 NOMBRE     TIPO       CATEGORIA    LIN    COL   
 ------------------------------------------------------
-miChar     char       variable     3      6     
+_b1_       string     variable     2      8     
+d          string     variable     3      8     
+var        int        variable     4      5     
+
+SCOPE: 3
+------------------------------------------------------
+NOMBRE     TIPO       CATEGORIA    LIN    COL   
+------------------------------------------------------
+asdasd     int        variable     24     5     

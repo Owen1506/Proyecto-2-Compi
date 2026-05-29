@@ -228,9 +228,9 @@ parametro ::= tipo:t SEP ID:id
             ;
 
 // Bloque principal del programa. Se registra en la tabla y se gestiona su scope.
-main_proc ::= EMPTY SEP MAIN PAR_I PAR_D 
+main_proc ::= EMPTY SEP MAIN:main PAR_I PAR_D 
             {:
-                tabla.insertar(new tabla.Simbolo("__main__", "empty", "funcion", 0, 0, tabla.getScopeActual()));
+                tabla.insertar(new tabla.Simbolo("__main__", "empty", "funcion", mainleft, mainright, tabla.getScopeActual()));
                 tabla.entrarScope();
             :}
               cuerpo_funcion
@@ -281,28 +281,37 @@ declaracion ::= declaracion_num
               ;
 
 // Declaracion de variables enteras o flotantes. Se registran en la tabla de simbolos.
-declaracion_num ::= INT SEP ID:id declaracion_num_resto_int:dec_num
+declaracion_num ::= INT SEP ID:id declaracion_num_resto_int:dec_num_int
 
-{:  
-    if (tabla.existeEnScope(id,tabla.getScopeActual()) && tabla.buscarSimbolo(id).getCategoria() != "parametro" ){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_num_INT) | " + "Linea:" + idleft +" Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "int", "variable", idleft, idright, tabla.getScopeActual()));
+{:
+    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
+        System.out.println("Error semantico: Este identificador ya esta declarado");
+    } else {
+        if ("int_arr".equals(dec_num_int)) {
+            tabla.insertar(new tabla.Simbolo(id,"int","arreglo",idleft,idright,tabla.getScopeActual()));
+        } else {
+            tabla.insertar(new tabla.Simbolo(id,"int","variable",idleft,idright,tabla.getScopeActual()));
+        }
     }
-    if (dec_num != "int" && dec_num != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo int |" + " Linea:" + idleft + " Columna: " + idright);
+
+    if (!"int".equals(dec_num_int) && !"int_arr".equals(dec_num_int) && !"PYC".equals(dec_num_int)) {
+        System.out.println("Error semantico: Valor asignado no es de tipo int");
     }
-    
 :}
                   | FLOAT SEP ID:id declaracion_num_resto_float:dec_num_float
 {:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_num_FLOAT) | " + " Linea:" + idleft + " Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "float", "variable", idleft, idright, tabla.getScopeActual()));
+    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
+        System.out.println("Error semantico: Este identificador ya esta declarado");
+    } else {
+        if ("float_arr".equals(dec_num_float)) {
+            tabla.insertar(new tabla.Simbolo(id,"float","arreglo",idleft,idright,tabla.getScopeActual()));
+        } else {
+            tabla.insertar(new tabla.Simbolo(id,"float","variable",idleft,idright,tabla.getScopeActual()));
+        }
     }
-    if (dec_num_float != "float" && dec_num_float != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo float |" + " Linea:" + idleft + " Columna: " + idright);
+
+    if (!"float".equals(dec_num_float) && !"float_arr".equals(dec_num_float) && !"PYC".equals(dec_num_float)) {
+        System.out.println("Error semantico: Valor asignado no es de tipo float");
     }
 :}
                   ;
@@ -320,7 +329,7 @@ declaracion_num_resto_int ::= PYC {: RESULT = "PYC"; :}
                             if (num2 != "int"){
                                 System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
                             }
-                            RESULT = "int";
+                            RESULT = "int_arr";
                         :}
                         | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
                         {: 
@@ -333,7 +342,7 @@ declaracion_num_resto_int ::= PYC {: RESULT = "PYC"; :}
                             if (_filas_init != "int"){
                                 System.out.println("Error semantico: Valor asignado no es de tipo int (Produccion declacion_num_resto_int) |" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
                             }
-                            RESULT = "int";
+                            RESULT = "int_arr";
                         :}
                         ;
 declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
@@ -347,7 +356,7 @@ declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
                             if (num2 != "int"){
                                 System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
                             }
-                            RESULT = "float";
+                            RESULT = "float_arr";
                         :}
                         | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
                         {: 
@@ -361,7 +370,7 @@ declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
                             if (_filas_init != "float"){
                                 System.out.println("Error semantico: Valor asignado no es de tipo float (Produccion declacion_num_resto_float)|" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
                             }                            
-                            RESULT = "float";
+                            RESULT = "float_arr";
                         :}
                         ;
 
@@ -496,9 +505,9 @@ asignacion ::= ID:id ASSIGN expresion:e1 PYC
              ;
 
 // Asignacion a una posicion especifica de un arreglo bidimensional.
-asignacion_array ::= acceso_array:acc_array ASSIGN expr_aritmetica:expr_arit PYC 
+asignacion_array ::= acceso_array:_acceso_array ASSIGN expr_aritmetica:_expr_aritmetica PYC 
                 {:  
-                    if(acc_array != expr_arit){
+                    if(_acceso_array != _expr_aritmetica){
                         System.out.println("Error semantico en asignacion_array: El tipo del dato a asignar no coincide con el tipo del arreglo");
                     }
                 :}
@@ -506,7 +515,6 @@ asignacion_array ::= acceso_array:acc_array ASSIGN expr_aritmetica:expr_arit PYC
 
 // Acceso a un elemento de un arreglo con dos indices.
 // La segunda alternativa permite recuperarse si los indices estan malformados.
-
 acceso_array ::= ID:id ARR_I expr_aritmetica:expr_arit ARR_D ARR_I expr_aritmetica:expr_arit2 ARR_D 
 {:
     if (expr_arit != "int"){
@@ -515,42 +523,87 @@ acceso_array ::= ID:id ARR_I expr_aritmetica:expr_arit ARR_D ARR_I expr_aritmeti
     if (expr_arit2 != "int"){
         System.out.println("Error semantico: indice 2 no es de tipo entero");
     }
- RESULT = tabla.buscarSimbolo(id).getTipo();  :}
+    if (tabla.buscarSimbolo(id).getCategoria() != "arreglo"){
+        System.out.println("Error semantico en acceso_array: Esta variable no le pertenece a un arreglo|"  + " Linea:" + idleft + " Columna: " + idright); 
+    }
+    RESULT = tabla.buscarSimbolo(id).getTipo();  :}
                | ID:id ARR_I error ARR_D ARR_I error ARR_D 
                ;
 
 // Estructura condicional: if con o sin else.
 //expresion aca debe ser tipo bool
-condicional ::= IF SEP PAR_I expresion:e1 PAR_D bloque {::}
-              | IF SEP PAR_I expresion:e1 PAR_D bloque ELSE SEP bloque {::} 
+condicional ::= IF SEP PAR_I expresion:e1 PAR_D bloque 
+                {:
+                    if (e1 != "bool"){
+                        System.out.println("Error semantico: Tipo de expresion en condicion del if erroneo, debe ser bool");
+                    }
+                :}
+              | IF SEP PAR_I expresion:e1 PAR_D bloque ELSE SEP bloque
+                {:
+                    if (e1 != "bool"){
+                        System.out.println("Error semantico: Tipo de expresion en condicion del if erroneo, debe ser bool");
+                    }
+                :}
               ;
 
 // Bucle do-while: ejecuta el bloque al menos una vez antes de evaluar la condicion.
-bucle ::= DO SEP bloque WHILE SEP PAR_I expresion PAR_D PYC
+bucle ::= DO SEP bloque WHILE SEP PAR_I expresion:e1 PAR_D PYC
+                {:
+                    if (e1 != "bool"){
+                        System.out.println("Error semantico: Tipo de expresion en condicion del while erroneo, debe ser bool");
+                    }
+                :}
         ;
 
 // Estructura switch: evalua una expresion y ejecuta el caso que coincida.
-multi_choice ::= SWITCH SEP PAR_I expresion PAR_D LLAVE_I lista_casos default_opt LLAVE_D
+//Expresion solo puede ser char y int e de igual manera case x, por ejemplo x debe ser del mismo tipo 
+multi_choice ::= SWITCH SEP PAR_I expresion:e1 PAR_D LLAVE_I lista_casos:_lista_casos default_opt LLAVE_D 
+{:  
+    if (e1 != _lista_casos){
+        System.out.println("Error semantico en produccion multi_choice: El tipo a verificar en los case no son del mismo tipo que el switch");
+    }
+:}
                ;
 
 // Uno o mas casos dentro de un switch.
-lista_casos ::= lista_casos caso
-              | caso
+lista_casos ::= lista_casos:_lista_casos caso:_caso
+            {:
+                if(_lista_casos.equals("error") || _caso.equals("error")){
+                    RESULT = "error";
+                }
+                else if(!_lista_casos.equals(_caso)){
+                    System.out.println("Error semantico: ");
+                    RESULT = "error";
+                }
+                else{
+                    RESULT = _lista_casos;
+                }
+            :}
+              | caso:_caso {: RESULT = _caso; :}
               ;
 
 // Un caso individual: etiqueta literal y sus sentencias asociadas.
-caso ::= CASE SEP literal_caso DOSPUNTOS sentencias
-       ;
+caso ::= CASE SEP literal_caso:_literal_caso DOSPUNTOS sentencias 
+    {:
+        RESULT = _literal_caso;
+    :}
+    ;
 
 // Caso por defecto opcional al final del switch.
-// TAL VEZ quitarle el SEPARADOR
 default_opt ::= DEFAULT SEP DOSPUNTOS sentencias
               | /* vacio */
               ;
 
 // Valores literales validos como etiqueta de un caso: numero, caracter o booleano.
-literal_caso ::= numero
-               | CHAR_LIT
+literal_caso ::= numero:num1 
+                {: 
+                if (num1 =="int"){
+                    RESULT = num1; 
+                }else{
+                    RESULT = "error";
+                }
+                :}
+               | CHAR_LIT:_char_lit {: RESULT = "char"; :}
                | TRUE
                | FALSE
                ;
@@ -558,18 +611,19 @@ literal_caso ::= numero
 // Instruccion de entrada: lee desde consola hacia una variable o posicion de arreglo.
 // entrada/CIN Debe permitir las funciones de leer (enteros y flotantes) 
 // No me acuerdo si el profe pidio borrar el de acceso_array por lo que lo comento por ahora
-entrada ::= CIN SEP PAR_I ID PAR_D 
+entrada ::= CIN SEP PAR_I ID:id PAR_D 
+        {:
+            if ( !tabla.buscarSimbolo(id).getTipo().equals("int") && !tabla.buscarSimbolo(id).getTipo().equals("float")){
+                System.out.println("Error semantico: Tipo de Identificador en CIN no es valido debe ser Int o Float" + "Tipo: " + tabla.buscarSimbolo(id).getTipo());
+            }
+        :}
         ;
-            // CIN SEP acceso_array
 
 // Instruccion de salida: imprime en consola uno o varios elementos.
 // salida estándar/COUT permite :(cadena carácter(es decir un string o bien un solo char), enteros, boolean y flotantes),
 salida ::= COUT SEP PAR_I lista_salida PAR_D
          ;
 // Lista de elementos a imprimir, separados por coma.
-// lista_salida ::= lista_salida COMMA item_salida
-//               | item_salida
-//               ;
 // Nota: Desd el flex se pasa como token tanto como numero entero como el flotante se pasa como "NUM" por lo que en este caso el terminal NUM corresponde a ambos
 lista_salida ::= STRING_LIT | CHAR_LIT | numero | atomo_bool | ID
                 ;
@@ -577,67 +631,124 @@ lista_salida ::= STRING_LIT | CHAR_LIT | numero | atomo_bool | ID
 // item_salida ::= expresion;
 
 // Una expresion puede ser logica o un literal de cadena de texto.
-expresion ::= expr_logica:expr_log
-            {: 
-            RESULT = expr_log;
-            :}
-            | STRING_LIT 
-            {: 
-            RESULT = "string"; 
-            :}
+expresion ::= expr_logica:expr_log {: RESULT = expr_log; :}
+            | STRING_LIT {: RESULT = "string"; :}
             ;
 
 // Expresion logica: conjunciones unidas opcionalmente por OR.
-expr_logica ::= expr_conjuncion:expr_conj resto_disyuncion
-            {: RESULT = expr_conj; :}
+expr_logica ::= expr_conjuncion:_expr_conjuncion resto_disyuncion:_resto_disyuncion
+            {:
+                if("vacio".equals(_resto_disyuncion)){
+                    // No hubo OR
+                    RESULT = _expr_conjuncion;
+                }else if(
+                    "bool".equals(_expr_conjuncion)
+                    &&
+                    "bool".equals(_resto_disyuncion)
+                ){
+                    RESULT = "bool";
+                }else{
+                    System.out.println("Error semantico: operacion OR invalida");
+                    RESULT = "error";
+                }
+            :}
             ;
 
 // Parte derecha de una disyuncion: puede continuar con mas OR o terminar.
-resto_disyuncion ::= OR expr_conjuncion resto_disyuncion
-                   | /* vacio */
-                   ;
+resto_disyuncion ::= OR:or expr_conjuncion:_expr_conjuncion resto_disyuncion:_resto_disyuncion
+                {:
+                    if(!"bool".equals(_expr_conjuncion)){
+                        RESULT = "error";
+                    }else if(!"bool".equals(_resto_disyuncion) && !"vacio".equals(_resto_disyuncion)){
+                        RESULT = "error";
+                    }else{
+                        RESULT = "bool";
+                    }
+                :}
+                | /* vacio */
+                {:
+                    RESULT = "vacio";
+                :}
+                ;
 
 // Expresion de conjuncion: negaciones unidas opcionalmente por AND.
-expr_conjuncion ::= expr_negacion:expr_neg resto_conjuncion
-                {: RESULT = expr_neg; :}
+expr_conjuncion ::= expr_negacion:_expr_negacion resto_conjuncion:_resto_conjuncion
+                {:
+                    if("vacio".equals(_resto_conjuncion)){
+                        RESULT = _expr_negacion;
+                    }else if(
+                        "bool".equals(_expr_negacion)
+                        &&
+                        "bool".equals(_resto_conjuncion)
+                    ){
+                        RESULT = "bool";
+                    }else{
+                        System.out.println("Error semantico: operacion AND invalida");
+                        RESULT = "error";
+                    }
+                :}
                 ;
 
 // Parte derecha de una conjuncion: puede continuar con mas AND o terminar.
-resto_conjuncion ::= AND expr_negacion resto_conjuncion
-                   | /* vacio */
-                   ;
+resto_conjuncion ::= AND expr_negacion:_expr_negacion resto_conjuncion:_resto_conjuncion
+                {:
+                    if(!"bool".equals(_expr_negacion)){
+                        System.out.println("Error semantico: operando AND no es booleano");
+                        RESULT = "error";
+                    }else if(!"bool".equals(_resto_conjuncion) && !"vacio".equals(_resto_conjuncion)){
+                        RESULT = "error";
+                    }else{
+                        RESULT = "bool";
+                    }
+                :}
+                | /* vacio */
+                {:
+                    RESULT = "vacio";
+                :}
+                ;
 
 // Negacion logica: puede aplicarse repetidamente o delegar en una comparacion.
-expr_negacion ::= NOT expr_negacion
-                | comparacion:comp 
-                {: RESULT = comp; :}
-                ;
+expr_negacion ::= NOT expr_negacion:_expr_negacion
+            {:
+                if(!"bool".equals(_expr_negacion)){
+                    System.out.println("Error semantico: NOT requiere expresion booleana");
+                    RESULT = "error";
+                }else{
+                    RESULT = "bool";
+                }
+            :}
+            | comparacion:_comparacion
+            {:
+                RESULT = _comparacion;
+            :}
+            ;
 
 // Una comparacion puede ser cualquiera de los operadores relacionales,
 // una expresion aritmetica sola, o un literal booleano.
-comparacion ::= expr_igual
-              | expr_n_igual
-              | expr_menor
-              | expr_menor_igual
-              | expr_mayor
-              | expr_mayor_igual
-              | expr_aritmetica:expr_arit {: RESULT = expr_arit; :}
+comparacion ::= expr_igual:_expr_igual {: RESULT = _expr_igual; :}
+              | expr_n_igual:_expr_n_igual {: RESULT = _expr_n_igual; :}
+              | expr_menor:_expr_menor {: RESULT = _expr_menor; :}
+              | expr_menor_igual:_expr_menor_igual {: RESULT = _expr_menor_igual; :}
+              | expr_mayor:_expr_mayor {: RESULT = _expr_mayor; :}
+              | expr_mayor_igual:_expr_mayor_igual {: RESULT = _expr_mayor_igual; :}
+              | expr_aritmetica:_expr_aritmetica {: RESULT = _expr_aritmetica; :}
               | atomo_bool:atomo_b {: RESULT = atomo_b; :}
               ;
 
 // Comparaciones relacionales: cada operador se escribe como palabra clave
 // seguida de dos operandos entre parentesis.
-expr_igual        ::= EQUAL PAR_I expr_logica COMMA expr_logica PAR_D;
+// Solo enteros flotantes y expresiones que puedan dar como resultado un bool.
+expr_igual        ::= EQUAL PAR_I expr_logica:_expr_logica1  COMMA expr_logica:_expr_logica2 PAR_D;
                    // | EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
 
-expr_n_igual      ::= N_EQUAL PAR_I expr_logica COMMA expr_logica PAR_D;
+expr_n_igual      ::= N_EQUAL PAR_I expr_logica:_expr_logica1 COMMA expr_logica:_expr_logica2 PAR_D;
                    // | N_EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
 
-
-expr_menor        ::= LESS_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
-expr_menor_igual  ::= LESS_TE PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
-expr_mayor        ::= GREATER_T PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
-expr_mayor_igual  ::= GREATER_TE PAR_I expr_aritmetica COMMA expr_aritmetica PAR_D;
+// Solo enteros y flotantes
+expr_menor        ::= LESS_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
+expr_menor_igual  ::= LESS_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
+expr_mayor        ::= GREATER_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
+expr_mayor_igual  ::= GREATER_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
 
 // Un atomo booleano es True, False, o una expresion logica entre parentesis.
 atomo_bool ::= TRUE {: RESULT = "bool"; :}
@@ -689,7 +800,6 @@ factor ::= unario
          | ID:id 
         {: 
             Simbolo s = tabla.buscarSimbolo(id);
-
             if(s != null){
                 RESULT = s.getTipo();
             } else {
@@ -699,7 +809,7 @@ factor ::= unario
         :}
          | CHAR_LIT:char1 {: RESULT = "char"; :}
          | acceso_array
-         | llamada_funcion
+         | llamada_funcion:llamada_fun {: RESULT = llamada_fun;  :}
          | PAR_I expr_aritmetica PAR_D
          ;
 
@@ -719,7 +829,11 @@ numero ::= INT_LIT:int_l {: RESULT = "int"; :}
 
 // Llamada a una funcion: nombre seguido de argumentos entre parentesis.
 // La segunda alternativa permite recuperarse si los argumentos estan malformados.
-llamada_funcion ::= ID PAR_I argumentos PAR_D
+llamada_funcion ::= ID:id PAR_I argumentos PAR_D 
+                {:
+                 //Aca validar que la cantidad de argumentos sean los correctos.
+                 RESULT = tabla.buscarSimbolo(id).getTipo();   
+                :}
                   | ID PAR_I error PAR_D
                   ;
 

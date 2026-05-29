@@ -1,11 +1,28 @@
-string~_func3_  <|  |>   |:  ¡¡semantico string
+int~_func3_ <|  |>   |:  ¡¡semantico string
 	string~_b1_!
-	return~"a"! 
+	string~d! 
+	int~var!
+	if ~ <| True |> |:
+		return~5!
+	:|
+			switch ~<| var |>  ¡¡semantico
+			 |: 
+				case~1: 
+					cout~<| "!¡¡" |> !
+				case~1:
+					var <- 10!
+					break!
+				default~: 
+					break!
+			 :| 
+	
+	cin~<| var |>!
 
   :| 
 
 empty~__main__ <|  |>  |: 
-	float~asdasd!
-	int~arr<<5>><<67>> <- |:	  |: 2 :| , |: 2 :|  :| !
-	arr<<0>><<asdasd>> <- 5!
+	int~asdasd!
+	asdasd<- 2!
+
  :| 
+
