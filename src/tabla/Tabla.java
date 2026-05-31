@@ -16,6 +16,8 @@ public class Tabla {
     // Permite saber en que nivel de anidamiento fueron declarados los simbolos que contiene.
     int idScope;
 
+    private boolean tieneReturn = false;
+
     // Crea una tabla vacia para el scope indicado.
     // Entrada: numero de scope que identificara a esta tabla.
     public Tabla(int idScope) {
@@ -50,6 +52,14 @@ public class Tabla {
     // Retorna el identificador numerico del scope de esta tabla.
     public int getIdScope() {
         return idScope;
+    }
+
+    public boolean tieneReturn() {
+        return tieneReturn;
+    }
+
+    public void setTieneReturn(boolean tieneReturn) {
+        this.tieneReturn = tieneReturn;
     }
 
     // Imprime en consola todos los simbolos registrados en esta tabla.

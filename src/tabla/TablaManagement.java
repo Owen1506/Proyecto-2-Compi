@@ -15,8 +15,8 @@ public class TablaManagement {
 
     // Pila de tablas activas. La que esta en la cima corresponde al scope actual.
     // Cuando se entra a un bloque se apila una nueva tabla; al salir se desapila.
-    Stack<Tabla> pilaScopes;
-
+    public Stack<Tabla> pilaScopes;
+    private Stack<Simbolo> pilaFuncionActual = new Stack<>();
     // Registro de todos los simbolos insertados a lo largo del analisis, en orden de aparicion.
     // Se conservan incluso despues de que su scope haya cerrado, lo que permite
     // consultar informacion como el scope de un identificador al exportar tokens.
@@ -74,25 +74,16 @@ public class TablaManagement {
         }
         return null;
     }
+    public void pushFuncionActual(Simbolo s) {
+        pilaFuncionActual.push(s);
+    }
+
+    public void popFuncionActual() {
+        pilaFuncionActual.pop();
+    }
+
     public Simbolo buscarSimboloFuncion() {
-
-        // Recorre desde el scope actual hacia afuera
-        for (int i = pilaScopes.size() - 1; i >= 0; i--) {
-
-            Tabla t = pilaScopes.get(i);
-
-            // Recorre los simbolos del scope
-            for (Simbolo s : t.obtenerSimbolos()) {
-
-                // Si encuentra una funcion, retorna esa
-                if (s.categoria.equals("funcion")) {
-                    return s;
-                }
-            }
-        }
-
-        // No se encontro ninguna funcion
-        return null;
+        return pilaFuncionActual.isEmpty() ? null : pilaFuncionActual.peek();
     }
     // Busca un simbolo en el historial completo, recorriendolo desde el final hacia el inicio.
     // Util para encontrar el scope en que fue declarado un identificador incluso si su tabla ya fue desapilada.

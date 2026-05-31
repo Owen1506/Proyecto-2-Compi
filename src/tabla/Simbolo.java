@@ -24,6 +24,14 @@ public class Simbolo {
     // El scope 0 es el global; cada bloque o funcion abre uno nuevo.
     int scope;
 
+    int filas = 0;
+
+    int columnas = 0;
+
+    boolean valor = false;
+
+    private String parametros;  // ej: "int,float,bool" o "" para vacío
+
     // Construye un simbolo con toda la informacion necesaria para registrarlo en la tabla.
     // Entrada: nombre del identificador, tipo de dato, categoria (variable/funcion/parametro),
     //          linea y columna donde aparece en el fuente, y el scope en que fue declarado.
@@ -46,6 +54,13 @@ public class Simbolo {
     public String getTipo() { return tipo; }
     // Genera una representacion legible del simbolo para imprimirla en consola o exportarla.
     // Incluye scope, nombre, tipo, categoria, linea y columna en un formato de una sola linea.
+
+    public void setFilas(int x){
+        this.filas = x;
+    }
+    public void setColumnas(int y){
+        this.columnas = y;
+    }
     public String toString() {
         return String.format(
             "[Scope %d] Nombre: %s : Tipo: %s Categoria: %s  Linea:%d Columna:%d ",
@@ -57,4 +72,12 @@ public class Simbolo {
             columna
         );
     }
+
+    public String getParametros(){ 
+        return parametros; 
+    }
+    public void setParametros(String param){ 
+        this.parametros = param; 
+    }
+
 }

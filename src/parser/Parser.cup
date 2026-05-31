@@ -12,16 +12,19 @@ import java_cup.runtime.*;
 import java.util.*;
 import tabla.TablaManagement;
 import tabla.Simbolo;
+import tabla.Tabla;
 parser code {:
 
     // Lista estatica donde se acumulan todos los errores sintacticos encontrados.
     // Es estatica para que pueda consultarse desde fuera sin necesitar una instancia del parser.
     private static final List<String> SYNTAX_ERRORS = new ArrayList<>();
+    private static final Stack<String> flagParaBreaks = new Stack<>();
+    private static final Stack<Simbolo> pilaFunciones = new Stack<>();
+    private static final Stack<HashSet<String>> pilaCasosSwitch = new Stack<>();
 
     // Tabla de simbolos que se va construyendo a medida que el parser reconoce
     // declaraciones, funciones y parametros.
     private TablaManagement tabla = new TablaManagement();
-
     // Permite que otras clases (como Main) accedan a la tabla de simbolos una vez terminado el analisis.
     public TablaManagement getTabla() {
         return tabla;
@@ -37,6 +40,53 @@ parser code {:
         return new ArrayList<>(SYNTAX_ERRORS);
     }
 
+    static String lexemaDe(String s) {
+        if(s == null || !s.contains(":")) return s;
+        return s.split(":",2)[0];
+    }
+
+    static String tipoDe(String s) {
+        if(s == null) return null;
+        if("error".equals(s) || "vacio".equals(s)) return s;
+        if(!s.contains(":")) return s; 
+        return s.split(":",2)[1];
+    }
+
+    public int obtenerCantFilas(String valor) {
+        String matriz = valor.split(":")[0];
+        // Quitar [ y ] externos
+        matriz = matriz.substring(1, matriz.length() - 1);
+        int filas = 0;
+        for (int i = 0; i < matriz.length(); i++) {
+            if (matriz.charAt(i) == '[') {
+                filas++;
+            }
+        }
+        return filas;
+    }
+
+    public int obtenerCantColumnas(String valor) {
+        String matriz = valor.split(":")[0];
+        // Quitar corchetes externos
+        matriz = matriz.substring(1, matriz.length() - 1);
+        String[] filas = matriz.split("\\],\\[");
+        int columnas = -1;
+        for (String fila : filas) {
+            fila = fila.replace("[", "").replace("]", "");
+            int cantColumnas;
+            if (fila.trim().isEmpty()) {
+                cantColumnas = 0;
+            } else {
+                cantColumnas = fila.split(",").length;
+            }
+            if (columnas == -1) {
+                columnas = cantColumnas;
+            } else if (columnas != cantColumnas) {
+                return -1; 
+            }
+        }
+        return columnas;
+    }
     // Punto de entrada alternativo para probar el parser directamente desde consola,
     // leyendo el codigo fuente desde la entrada estandar.
     public static void main(String[] args) throws Exception {
@@ -63,7 +113,6 @@ parser code {:
             Symbol symbol = (Symbol) info;
             if (symbol.left > 0) line = symbol.left;
         }
-
         // Si el simbolo no tenia informacion de linea, se le pregunta directamente al lexer.
         if (line == -1) {
             try {
@@ -138,29 +187,29 @@ terminal CIN, COUT;
 
 non terminal  String tipo_retorno;        // tipo que retorna una funcion
 non terminal  String tipo;                // tipo de dato en general
-non terminal  programa, funciones, funcion;
-non terminal  main_proc, bloque, cuerpo_funcion, sentencias, sentencia;
-non terminal  condicional, bucle, multi_choice;
-non terminal  lista_casos, caso, default_opt;
-non terminal  entrada, salida, lista_salida ;
-non terminal  declaracion;
-non terminal  declaracion_num, declaracion_scalar, declaracion_num_resto,declaracion_num_resto_float, declaracion_num_resto_int, declaracion_scalar_resto;
-non terminal  asignacion, asignacion_array;
-non terminal  expresion;
-non terminal  expr_logica, expr_conjuncion, expr_negacion;
-non terminal  resto_disyuncion, resto_conjuncion;
-non terminal  comparacion;
-non terminal  expr_igual, expr_n_igual, expr_menor, expr_menor_igual, expr_mayor, expr_mayor_igual;
-non terminal  expr_aritmetica, resto_expresion;
-non terminal  termino, resto_termino;
-non terminal  potencia, resto_potencia;
-non terminal  factor;
-non terminal  unario, atomo_bool;
-non terminal  llamada_funcion, argumentos;
-non terminal  parametros, parametro;
-non terminal  numero, literal_caso;
-non terminal  dimensiones, acceso_array;
-non terminal  filas_init, fila_init, lista_valores;
+non terminal  String programa, funciones, funcion;
+non terminal  String main_proc, bloque, cuerpo_funcion, sentencias, sentencia;
+non terminal  String condicional, bucle, multi_choice;
+non terminal  String lista_casos, caso, default_opt;
+non terminal  String entrada, salida, lista_salida ;
+non terminal  String declaracion;
+non terminal  String declaracion_num, declaracion_scalar,declaracion_num_resto_float, declaracion_num_resto_int, declaracion_scalar_resto;
+non terminal  String asignacion, asignacion_array;
+non terminal  String expresion;
+non terminal  String expr_logica, expr_conjuncion, expr_negacion;
+non terminal  String resto_disyuncion, resto_conjuncion;
+non terminal  String comparacion;
+non terminal  String expr_igual, expr_n_igual, expr_menor, expr_menor_igual, expr_mayor, expr_mayor_igual;
+non terminal  String expr_aritmetica, resto_expresion;
+non terminal  String termino, resto_termino;
+non terminal  String potencia, resto_potencia;
+non terminal  String factor;
+non terminal  String unario, atomo_bool;
+non terminal  String llamada_funcion, argumentos;
+non terminal  String parametros, parametro;
+non terminal  String numero, literal_caso;
+non terminal  String  acceso_array;
+non terminal  String filas_init, fila_init, lista_valores;
 
 // ===== PRECEDENCIA Y ASOCIATIVIDAD =====
 // Define como resolver ambiguedades cuando dos operadores compiten por el mismo operando.
@@ -191,17 +240,33 @@ funciones ::= funciones funcion
 
 // Definicion de una funcion: tipo de retorno, nombre, parametros y cuerpo.
 // Al reconocerla se registra en la tabla de simbolos y se abre un nuevo scope.
-funcion ::= tipo_retorno:t SEP ID:id
+funcion ::= tipo_retorno:_tipo_retorno SEP ID:_id
             {:
-                if (tabla.existe(id)){
-                    System.out.println("Error semantico: Esta funcion ya existe | "+ " Linea:" + idleft + " Columna: " + idright );
+                if (tabla.existe(_id)){
+                    System.out.println("Error semantico: Esta funcion ya existe" + " | Linea:" + _idleft + " Columna: " + _idright);
                 }else{
-                    tabla.insertar(new tabla.Simbolo(id, t, "funcion", idleft, idright, tabla.getScopeActual()));
+                    tabla.insertar(new tabla.Simbolo(_id, _tipo_retorno, "funcion", _idleft, _idright, tabla.getScopeActual()));
+                    tabla.pushFuncionActual(new tabla.Simbolo(_id, _tipo_retorno, "funcion", _idleft, _idright, tabla.getScopeActual()));
                     tabla.entrarScope();
                 }
             :}
-            PAR_I parametros PAR_D cuerpo_funcion
-            {: tabla.salirScope(); :}
+            PAR_I parametros:_parametros PAR_D cuerpo_funcion
+            {:
+                Simbolo s = tabla.buscarSimbolo(_id);
+                if (s != null) {
+                    s.setParametros(_parametros);
+                }
+                // Verificar que la función (si no es empty) tenga al menos un return
+                if (s != null && !s.getTipo().equals("empty")) {
+                    Tabla scopeFuncion = tabla.pilaScopes.peek(); 
+                    if (!scopeFuncion.tieneReturn()) {
+                        System.out.println("Error semantico: la funcion '" + _id + "' no tiene ninguna sentencia 'return'");
+                    }
+                }
+                tabla.popFuncionActual(); 
+                tabla.salirScope();
+                RESULT = "";
+            :}
           ;
 
 // Tipos de retorno validos para una funcion.
@@ -213,28 +278,40 @@ tipo_retorno ::= INT    {: RESULT = "int";    :}
                ;
 
 // Lista de parametros de una funcion: puede estar vacia o tener varios separados por coma.
-parametros ::= parametros COMMA parametro {: //System.out.println("ENTRA EN PARAMETRO"); 
-:}
-             | parametro  {: //System.out.println("ENTRA EN PARAMETRO"); 
-             :}
-             | /* vacio */
+parametros ::= parametros:_parametro1 COMMA parametro:_parametro2
+            {:
+                RESULT = _parametro1 + "," + _parametro2;
+            :}
+            | parametro:_parametro
+            {:
+                RESULT = _parametro;
+            :}
+            | /* vacio */
+            {:
+                RESULT = "";   // sin parámetros
+            :}
              ;
 
 // Un parametro individual: tipo, separador y nombre. Se registra en la tabla de simbolos.
-parametro ::= tipo:t SEP ID:id
+parametro ::= tipo:_tipo SEP ID:_id
             {:
-                tabla.insertar(new tabla.Simbolo(id, t, "parametro", idleft, idright, tabla.getScopeActual()));
+                tabla.insertar(new tabla.Simbolo(_id, _tipo, "parametro", _idleft, _idright, tabla.getScopeActual()));
+                RESULT = _tipo;
             :}
             ;
 
 // Bloque principal del programa. Se registra en la tabla y se gestiona su scope.
-main_proc ::= EMPTY SEP MAIN:main PAR_I PAR_D 
+main_proc ::= EMPTY SEP MAIN:_main PAR_I PAR_D 
             {:
-                tabla.insertar(new tabla.Simbolo("__main__", "empty", "funcion", mainleft, mainright, tabla.getScopeActual()));
+                tabla.insertar(new tabla.Simbolo("__main__", "empty", "funcion", _mainleft, _mainright, tabla.getScopeActual()));
                 tabla.entrarScope();
+                tabla.pushFuncionActual(new tabla.Simbolo("__main__", "empty", "funcion", _mainleft, _mainright, tabla.getScopeActual()));
             :}
               cuerpo_funcion
-            {: tabla.salirScope(); :}
+            {: 
+            tabla.salirScope(); 
+            tabla.popFuncionActual();
+            :}
             ;
 
 // Cuerpo de una funcion: sentencias entre llaves.
@@ -246,7 +323,9 @@ cuerpo_funcion ::= LLAVE_I sentencias LLAVE_D
 // Bloque de sentencias anidado (como el cuerpo de un if o un while).
 // Abre y cierra un scope propio para las variables declaradas dentro.
 bloque ::=  LLAVE_I
-         {: tabla.entrarScope(); :} sentencias LLAVE_D {: tabla.salirScope(); :}
+         {: tabla.entrarScope(); :} 
+         sentencias LLAVE_D 
+         {: tabla.salirScope(); :}
          | LLAVE_I error LLAVE_D 
          ;
 
@@ -263,10 +342,38 @@ sentencia ::= declaracion
             | condicional
             | bucle
             | multi_choice
-            | BREAK PYC
-            | RETURN SEP expresion:e1 PYC {: if(e1 != tabla.buscarSimboloFuncion().getTipo()){ 
-               System.out.println("Error semantico: Tipo del return diferente al de funcion | " + " Linea:" + e1left + " Columna: " + e1right); 
-            } :}
+            | BREAK:_break PYC
+              {:
+                  if (flagParaBreaks.isEmpty()) {
+                      System.out.println("Error semantico: break solo permitido dentro de bucle o case/default de switch" + " | Linea:" + _breakleft + " Columna: " + _breakright);
+                  }
+              :}  
+            | RETURN:_return SEP expresion:e1 PYC 
+            {:
+                Tabla actual = tabla.pilaScopes.peek();
+                Simbolo funcionActual = tabla.buscarSimboloFuncion();
+            
+                //Verificar que estamos dentro de una funcion
+                if (funcionActual == null) {
+                    System.out.println("Error semantico: return fuera de funcion" + " | Linea:" + _returnleft + " Columna: " + _returnright );
+                }
+                //Verificar que la funcion no sea empty
+                else if (funcionActual.getTipo().equals("empty")) {
+                    System.out.println("Error semantico: funcion tipo 'empty' no puede tener return" + " | Linea:" + _returnleft + " Columna: " + _returnright );
+                }
+                //Verificar que no haya multiples returns
+                else if (actual.tieneReturn()) {
+                    System.out.println("Error semantico: ya existe un return en este scope" + " | Linea:" + _returnleft + " Columna: " + _returnright );
+                }
+                //Verificar que el tipo coincida
+                else if (!funcionActual.getTipo().equals(tipoDe(e1))) {
+                    System.out.println("Error semantico: tipo del return (" + e1 + ") diferente al de la funcion (" + funcionActual.getTipo() + ") | Linea:" + e1left + " Columna: " + e1right);
+                }
+                //marcar que hay return
+                else {
+                    actual.setTieneReturn(true);
+                }
+            :}
             | entrada PYC
             | salida PYC
             | expresion:e1 PYC
@@ -282,38 +389,38 @@ declaracion ::= declaracion_num
 
 // Declaracion de variables enteras o flotantes. Se registran en la tabla de simbolos.
 declaracion_num ::= INT SEP ID:id declaracion_num_resto_int:dec_num_int
-
-{:
-    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
-        System.out.println("Error semantico: Este identificador ya esta declarado");
-    } else {
-        if ("int_arr".equals(dec_num_int)) {
-            tabla.insertar(new tabla.Simbolo(id,"int","arreglo",idleft,idright,tabla.getScopeActual()));
-        } else {
-            tabla.insertar(new tabla.Simbolo(id,"int","variable",idleft,idright,tabla.getScopeActual()));
-        }
-    }
-
-    if (!"int".equals(dec_num_int) && !"int_arr".equals(dec_num_int) && !"PYC".equals(dec_num_int)) {
-        System.out.println("Error semantico: Valor asignado no es de tipo int");
-    }
-:}
-                  | FLOAT SEP ID:id declaracion_num_resto_float:dec_num_float
-{:
-    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
-        System.out.println("Error semantico: Este identificador ya esta declarado");
-    } else {
-        if ("float_arr".equals(dec_num_float)) {
-            tabla.insertar(new tabla.Simbolo(id,"float","arreglo",idleft,idright,tabla.getScopeActual()));
-        } else {
-            tabla.insertar(new tabla.Simbolo(id,"float","variable",idleft,idright,tabla.getScopeActual()));
-        }
-    }
-
-    if (!"float".equals(dec_num_float) && !"float_arr".equals(dec_num_float) && !"PYC".equals(dec_num_float)) {
-        System.out.println("Error semantico: Valor asignado no es de tipo float");
-    }
-:}
+                {:
+                    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
+                        System.out.println("Error semantico: Este identificador ya esta declarado" + " | Linea:" + idleft + " Columna: " + idright );
+                    } else {
+                        if ("int_arr".equals(dec_num_int)) {
+                            tabla.insertar(new tabla.Simbolo(id,"int","arreglo",idleft,idright,tabla.getScopeActual()));
+                        } else {
+                            tabla.insertar(new tabla.Simbolo(id,"int","variable",idleft,idright,tabla.getScopeActual()));
+                        }
+                    }
+                    String lexema = lexemaDe(dec_num_int);
+                    String tipo   = tipoDe(dec_num_int);
+                    if (!"int".equals(tipo) && !"int_arr".equals(tipo) && !"PYC".equals(tipo)) {
+                        System.out.println("Error semantico: Valor asignado no es de tipo int" + " | Linea:" + dec_num_intleft + " Columna: " + dec_num_intright );
+                    }
+                :}
+                                | FLOAT SEP ID:id declaracion_num_resto_float:dec_num_float
+                {:
+                    if (tabla.existeEnScope(id, tabla.getScopeActual())) {
+                        System.out.println("Error semantico: Este identificador ya esta declarado" + " | Linea:" + idleft + " Columna: " + idright );
+                    } else {
+                        if ("float_arr".equals(dec_num_float)) {
+                            tabla.insertar(new tabla.Simbolo(id,"float","arreglo",idleft,idright,tabla.getScopeActual()));
+                        } else {
+                            tabla.insertar(new tabla.Simbolo(id,"float","variable",idleft,idright,tabla.getScopeActual()));
+                        }
+                    }
+                    String lexema = tipoDe(dec_num_float);
+                    if (!"float".equals(dec_num_float) && !"float_arr".equals(dec_num_float) && !"PYC".equals(dec_num_float)) {
+                        System.out.println("Error semantico: Valor asignado no es de tipo float" + " | Linea:" + dec_num_floatleft + " Columna: " + dec_num_floatright );
+                    }
+                :}
                   ;
 
 // Parte final de una declaracion numerica: puede terminar sola, con asignacion,
@@ -321,25 +428,23 @@ declaracion_num ::= INT SEP ID:id declaracion_num_resto_int:dec_num_int
 declaracion_num_resto_int ::= PYC {: RESULT = "PYC"; :}
                         | ASSIGN expresion:e1 PYC
                         {: RESULT = e1; :}
-                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D PYC 
+                        | ARR_I INT_LIT:int_1 ARR_D ARR_I INT_LIT:int_2 ARR_D PYC 
                         {: //Aca no puedo pasar que el result es de tipo int porque el identificador que se definio antes en dec_num puede ser tipo float o int
-                            if (num1 != "int"){
-                                System.out.println(" Arr dec Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
-                            }
-                            if (num2 != "int"){
-                                System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
-                            }
                             RESULT = "int_arr";
                         :}
-                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
+                        | ARR_I INT_LIT:int_1 ARR_D ARR_I INT_LIT:int_2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
                         {: 
-                            if (num1 != "int"){
-                                System.out.println(" ARr dec asig Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            int filas = obtenerCantFilas(_filas_init);
+                            int columnas = obtenerCantColumnas(_filas_init);
+                            if (filas != Integer.parseInt(int_1)){
+                                System.out.println("Error semantico: Cantidad de filas declaradas no coinciden con las asignadas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
                             }
-                            if (num2 != "int"){
-                                System.out.println("Arr dec asig Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            if (columnas == -1){
+                                System.out.println("Error semantico: La cantidad de columnas no son consistentes entre las filas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
+                            }else if(columnas != Integer.parseInt(int_2)){
+                                System.out.println("Error semantico: Cantidad de columnas declaradas no coinciden con las asignadas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
                             }
-                            if (_filas_init != "int"){
+                            if (!tipoDe(_filas_init).equals("int")){
                                 System.out.println("Error semantico: Valor asignado no es de tipo int (Produccion declacion_num_resto_int) |" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
                             }
                             RESULT = "int_arr";
@@ -348,28 +453,25 @@ declaracion_num_resto_int ::= PYC {: RESULT = "PYC"; :}
 declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
                         | ASSIGN expresion:e1 PYC
                         {: RESULT = e1; :}
-                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D PYC 
-                        {: //Aca no puedo pasar que el result es de tipo int porque el identificador que se definio antes en dec_num puede ser tipo float o int
-                            if (num1 != "int"){
-                                System.out.println(" Arr dec Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
-                            }
-                            if (num2 != "int"){
-                                System.out.println("Arr dec Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
-                            }
+                        | ARR_I INT_LIT:int_1 ARR_D ARR_I INT_LIT:int_2 ARR_D PYC 
+                        {: // Aca no puedo pasar que el result es de tipo int porque el identificador que se definio antes en dec_num puede ser tipo float o int       
                             RESULT = "float_arr";
                         :}
-                        | ARR_I numero:num1 ARR_D ARR_I numero:num2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
+                        | ARR_I INT_LIT:int_1 ARR_D ARR_I INT_LIT:int_2 ARR_D ASSIGN LLAVE_I filas_init:_filas_init LLAVE_D PYC
                         {: 
-                            if (num1 != "int"){
-                                System.out.println(" ARr dec asig Error semantico num1: Valor no es de tipo int |" + "Valor: " +num1 + " Linea:" + num1left + " Columna: " + num1right); 
+                            int filas = obtenerCantFilas(_filas_init);
+                            int columnas = obtenerCantColumnas(_filas_init);
+                            if (filas != Integer.parseInt(int_1)){
+                                System.out.println("Error semantico: Cantidad de filas declaradas no coinciden con las asignadas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
                             }
-                            if (num2 != "int"){
-                                System.out.println("Arr dec asig Error semantico num2: Valor no es de tipo int  |" + "Valor: " +num2 + " Linea:" + num2left + " Columna: " + num2right); 
+                            if (columnas == -1){
+                                System.out.println("Error semantico: La cantidad de columnas no son consistentes entre las filas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
+                            }else if(columnas != Integer.parseInt(int_2)){
+                                System.out.println("Error semantico: Cantidad de columnas declaradas no coinciden con las asignadas" + " | Linea: " + _filas_initleft + " Columna: " + _filas_initright);
                             }
-                            //Aca validar que lo que trae filas_init etc sea float.
-                            if (_filas_init != "float"){
-                                System.out.println("Error semantico: Valor asignado no es de tipo float (Produccion declacion_num_resto_float)|" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
-                            }                            
+                            if (!tipoDe(_filas_init).equals("float")){
+                                System.out.println("Error semantico: Valor asignado no es de tipo int (Produccion declacion_num_resto_float) |" + " Linea:" + _filas_initleft + " Columna: " + _filas_initright);
+                            }
                             RESULT = "float_arr";
                         :}
                         ;
@@ -377,60 +479,65 @@ declaracion_num_resto_float ::= PYC {: RESULT = "PYC"; :}
 // Declaracion de variables de tipo char, string, bool, expint o frac.
 // Cada una se registra en la tabla de simbolos con su tipo correspondiente.
 declaracion_scalar ::= CHAR SEP ID:id declaracion_scalar_resto:dec_scalar
-{:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_CHAR) | " + " Linea:" + idleft + " Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
-    }
-    if (dec_scalar != "char" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo char |" + " Linea:" + idleft + " Columna: " + idright);
-    }
-:}
-                     | STRING SEP ID:id declaracion_scalar_resto:dec_scalar
-{:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_STRING) | " + " Linea:" + idleft + " Columna: " + idright);   
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
-    }
-    if (dec_scalar != "string" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo string |" + " Linea:" + idleft + " Columna: " + idright);
-    }
-:}
-                     | BOOL SEP ID:id declaracion_scalar_resto:dec_scalar
-{:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_BOOL) |" + " Linea:" + idleft + " Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
-    }
-    if (dec_scalar != "bool" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo bool |" + " Linea:" + idleft + " Columna: " + idright);
-    }
-:}
-                     | EXPINT_KW SEP ID:id declaracion_scalar_resto:dec_scalar
-{:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_EXPINT) |" + " Linea:" + idleft + " Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
-    }
-    if (dec_scalar != "expint" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo expint |" + " Linea:" + idleft + " Columna: " + idright);
-    }
-:}
-                     | FRAC_KW SEP ID:id declaracion_scalar_resto:dec_scalar
-{:
-    if (tabla.existe(id)){
-        System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_FRAC) |" + " Linea:" + idleft + " Columna: " + idright);
-    }else{
-        tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
-    }
-    if (dec_scalar != "frac" && dec_scalar != "PYC"){
-        System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + dec_scalarleft + " Columna: " + dec_scalarright);
-    }
-:}
+                    {:
+                        if (tabla.existe(id)){
+                            System.out.println("Error semantico: Este identificador ya esta declarado (CHAR) | Linea:" + idleft);
+                        } else {
+                            tabla.insertar(new Simbolo(id, "char", "variable", idleft, idright, tabla.getScopeActual()));
+                        }
+                        String tipoDec = tipoDe(dec_scalar);
+                        if (!"char".equals(tipoDec) && !"PYC".equals(tipoDec)) {
+                            System.out.println("Error semantico: Valor asignado no es de tipo char");
+                        }
+                        RESULT = "";   
+                    :}
+                                        | STRING SEP ID:id declaracion_scalar_resto:dec_scalar
+                    {:
+                        if (tabla.existe(id)){
+                            System.out.println("Error semantico: ident. ya declarado (STRING)");
+                        } else {
+                            tabla.insertar(new Simbolo(id, "string", "variable", idleft, idright, tabla.getScopeActual()));
+                        }
+                        String tipoDec = tipoDe(dec_scalar);
+                        if (!"string".equals(tipoDec) && !"PYC".equals(tipoDec)) {
+                            System.out.println("Error semantico: Valor asignado no es de tipo string");
+                        }
+                        RESULT = "";
+                    :}
+                                        | BOOL SEP ID:id declaracion_scalar_resto:dec_scalar
+                    {:
+                        String tipoDec = tipoDe(dec_scalar);
+                        if (tabla.existe(id)){
+                            System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_BOOL) |" + " Linea:" + idleft + " Columna: " + idright);
+                        }else{
+                            tabla.insertar(new tabla.Simbolo(id, "bool", "variable", idleft, idright, tabla.getScopeActual()));
+                        }
+                        if (!"bool".equals(tipoDec) && !"PYC".equals(tipoDec)){
+                            System.out.println("Error semantico: Valor asignado no es de tipo bool |" + " Linea:" + idleft + " Columna: " + idright);
+                        }
+                    :}
+                                        | EXPINT_KW SEP ID:id declaracion_scalar_resto:dec_scalar
+                    {:
+                        if (tabla.existe(id)){
+                            System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_EXPINT) |" + " Linea:" + idleft + " Columna: " + idright);
+                        }else{
+                            tabla.insertar(new tabla.Simbolo(id, "expint", "variable", idleft, idright, tabla.getScopeActual()));
+                        }
+                        if (dec_scalar != "expint" && dec_scalar != "PYC"){
+                            System.out.println("Error semantico: Valor asignado no es de tipo expint |" + " Linea:" + idleft + " Columna: " + idright);
+                        }
+                    :}
+                                        | FRAC_KW SEP ID:id declaracion_scalar_resto:dec_scalar
+                    {:
+                        if (tabla.existe(id)){
+                            System.out.println("Error semantico: Este identificador ya esta declarado (Produccion declaracion_escalar_FRAC) |" + " Linea:" + idleft + " Columna: " + idright);
+                        }else{
+                            tabla.insertar(new tabla.Simbolo(id, "frac", "variable", idleft, idright, tabla.getScopeActual()));
+                        }
+                        if (dec_scalar != "frac" && dec_scalar != "PYC"){
+                            System.out.println("Error semantico: Valor asignado no es de tipo frac |" + " Linea:" + dec_scalarleft + " Columna: " + dec_scalarright);
+                        }
+                    :}
                      ;
 
 // Parte final de una declaracion escalar: termina sola o con un valor inicial.
@@ -439,230 +546,322 @@ declaracion_scalar_resto ::= PYC {: RESULT = "PYC"; :}
                             {: RESULT = e1; :}
                            ;
 
-// Dimensiones de un arreglo bidimensional: dos indices entre corchetes.
-dimensiones ::= ARR_I INT_LIT ARR_D ARR_I INT_LIT ARR_D; //*** ESTA NO SE USA
-
 // Inicializacion de un arreglo bidimensional: lista de filas separadas por coma.
 filas_init ::= filas_init:_filas_init COMMA fila_init:_fila_init
-{:
-    if(_filas_init.equals("error") || _fila_init.equals("error")){
-        RESULT = "error";
-    }
-    else if(!_filas_init.equals(_fila_init)){
-        System.out.println("Error semantico: ");
-        RESULT = "error";
-    }
-    else{
-        RESULT = _filas_init;
-    }
-:}
-             | fila_init:_fila_init
-{:
-    RESULT = _fila_init;
-:}
+            {:
+                if ("error".equals(tipoDe(_filas_init)) || "error".equals(tipoDe(_fila_init))) {
+                    RESULT = "error";
+                } else if (!tipoDe(_filas_init).equals(tipoDe(_fila_init))) {
+                    System.out.println("Error semantico: tipos inconsistentes entre filas");
+                    RESULT = "error";
+                } else {
+                    String base = lexemaDe(_filas_init);
+                    String sinUltimoCorchete = base.substring(0, base.length() - 1);
+                    String nuevaFila = lexemaDe(_fila_init);
+                    String lex = sinUltimoCorchete + "," + nuevaFila + "]";
+                    RESULT = lex + ":" + tipoDe(_filas_init);
+                }
+            :}
+                        | fila_init:_fila_init
+            {:
+                if ("error".equals(tipoDe(_fila_init))) {
+                    RESULT = "error";
+                } else {
+                    // Una sola fila: la envolvemos entre corchetes exteriores
+                    String lex = "[" + lexemaDe(_fila_init) + "]";
+                    RESULT = lex + ":" + tipoDe(_fila_init);
+                }
+            :}
              ;
 
 // Una fila del arreglo: lista de valores entre llaves.
 // La alternativa con 'error' permite recuperarse si el contenido de la fila esta malformado.
-fila_init ::= LLAVE_I lista_valores:_lista_valores LLAVE_D {: RESULT = _lista_valores; :}
+fila_init ::= LLAVE_I lista_valores:_lista_valores LLAVE_D 
+            {: 
+                if ("error".equals(tipoDe(_lista_valores))) {
+                    RESULT = "error";
+                } else {
+                    String lex = "[" + lexemaDe(_lista_valores) + "]";
+                    RESULT = lex + ":" + tipoDe(_lista_valores);
+                }
+            :}
             | LLAVE_I error LLAVE_D
+            {:
+                RESULT = "error";
+            :}
             ;
 
 // Lista de valores numericos dentro de una fila, separados por coma.
 lista_valores ::= lista_valores:_lista_valores COMMA expr_aritmetica:expr_arit
-{:
-    if(_lista_valores.equals("error") || expr_arit.equals("error")){
-        RESULT = "error";
-    }
-    else if(!_lista_valores.equals(expr_arit)){
-        System.out.println("Error semantico: ");
-        RESULT = "error";
-    }
-    else{
-        RESULT = _lista_valores;
-    }
-:}
+            {:
+                if ("error".equals(tipoDe(_lista_valores)) || "error".equals(tipoDe(expr_arit))) {
+                    RESULT = "error";
+                } else if (!tipoDe(_lista_valores).equals(tipoDe(expr_arit))) {
+                    System.out.println("Error semantico: tipos inconsistentes en lista de valores");
+                    RESULT = "error";
+                } else {
+                    String lex = lexemaDe(_lista_valores) + "," + lexemaDe(expr_arit);
+                    RESULT = lex + ":" + tipoDe(_lista_valores);
+                }
+            :}
 
-| expr_aritmetica:expr_arit
-{:
-    RESULT = expr_arit;
-:}
-;
+            | expr_aritmetica:expr_arit
+            {:
+                if ("error".equals(tipoDe(expr_arit))) {
+                    RESULT = "error";
+                } else {
+                    RESULT = lexemaDe(expr_arit) + ":" + tipoDe(expr_arit);
+                }
+            :}
+            ;
 
 // Asignacion simple: un identificador recibe el valor de una expresion.
 asignacion ::= ID:id ASSIGN expresion:e1 PYC
             {:
-                if (tabla.existe(id) == true && tabla.existeEnScope(id,tabla.getScopeActual()) == false){
-                    System.out.println("Error semantico: Este identificador no existe en este scope (Produccion asignacion) | " + " Linea:" + idleft + " Columna: " + idright);
+                Simbolo s = tabla.buscarSimbolo(id);
+                if (s == null) {
+                    System.out.println("Error semantico: variable no declarada '" + id + "' | Linea:" + idleft + " Columna: " + idright);
+                } else if (!s.getTipo().equals(tipoDe(e1))) {
+                    System.out.println("Error semantico: tipo incompatible en asignacion | Linea:" + e1left + " Columna: " + idright);
                 }
-                if (tabla.existe(id) == false){
-                    System.out.println("Error semantico: Este identificador no existe(Produccion asignacion) | " + " Linea:" + idleft + " Columna: " + idright);
-                }
-                if (tabla.buscarSimbolo(id).getTipo() != e1){
-                    System.out.println("Error semantico: Tipo a asignar no es el mismo que el declarado (Produccion asignacion) | " + " Linea:" + e1left + " Columna: " + e1right);     
-                }
+                RESULT = "";
             :}
              ;
 
 // Asignacion a una posicion especifica de un arreglo bidimensional.
 asignacion_array ::= acceso_array:_acceso_array ASSIGN expr_aritmetica:_expr_aritmetica PYC 
                 {:  
-                    if(_acceso_array != _expr_aritmetica){
-                        System.out.println("Error semantico en asignacion_array: El tipo del dato a asignar no coincide con el tipo del arreglo");
+                    if (!tipoDe(_acceso_array).equals(tipoDe(_expr_aritmetica))) {
+                        System.out.println("Error semantico: tipos no coinciden en asignacion de arreglo");
                     }
+                    RESULT = "";
                 :}
                    ;
 
 // Acceso a un elemento de un arreglo con dos indices.
 // La segunda alternativa permite recuperarse si los indices estan malformados.
 acceso_array ::= ID:id ARR_I expr_aritmetica:expr_arit ARR_D ARR_I expr_aritmetica:expr_arit2 ARR_D 
-{:
-    if (expr_arit != "int"){
-        System.out.println("Error semantico: indice 1 no es de tipo entero ");
-    }
-    if (expr_arit2 != "int"){
-        System.out.println("Error semantico: indice 2 no es de tipo entero");
-    }
-    if (tabla.buscarSimbolo(id).getCategoria() != "arreglo"){
-        System.out.println("Error semantico en acceso_array: Esta variable no le pertenece a un arreglo|"  + " Linea:" + idleft + " Columna: " + idright); 
-    }
-    RESULT = tabla.buscarSimbolo(id).getTipo();  :}
+            {:
+                if (!"int".equals(tipoDe(expr_arit))) System.out.println("Error: indice 1 no entero");
+                if (!"int".equals(tipoDe(expr_arit2))) System.out.println("Error: indice 2 no entero");
+                Simbolo s = tabla.buscarSimbolo(id);
+                if (s != null && !"arreglo".equals(s.getCategoria())) {
+                    System.out.println("Error: la variable no es arreglo");
+                }
+                if (s == null) {
+                    RESULT = "error";
+                } else {
+                    String lex = id + "[" + lexemaDe(expr_arit) + "][" + lexemaDe(expr_arit2) + "]";
+                    RESULT = lex + ":" + s.getTipo();
+                }
+            :}
                | ID:id ARR_I error ARR_D ARR_I error ARR_D 
+            {:
+                RESULT = "error";
+            :}
                ;
 
 // Estructura condicional: if con o sin else.
 //expresion aca debe ser tipo bool
 condicional ::= IF SEP PAR_I expresion:e1 PAR_D bloque 
                 {:
-                    if (e1 != "bool"){
-                        System.out.println("Error semantico: Tipo de expresion en condicion del if erroneo, debe ser bool");
+                    if (!"bool".equals(tipoDe(e1))) {
+                        System.out.println("Error: expresion del if debe ser booleana");
                     }
+                    RESULT = "";
                 :}
               | IF SEP PAR_I expresion:e1 PAR_D bloque ELSE SEP bloque
                 {:
-                    if (e1 != "bool"){
-                        System.out.println("Error semantico: Tipo de expresion en condicion del if erroneo, debe ser bool");
+                    if (!"bool".equals(tipoDe(e1))) {
+                        System.out.println("Error: expresion del if debe ser booleana");
                     }
+                    RESULT = "";
                 :}
               ;
 
 // Bucle do-while: ejecuta el bloque al menos una vez antes de evaluar la condicion.
-bucle ::= DO SEP bloque WHILE SEP PAR_I expresion:e1 PAR_D PYC
-                {:
-                    if (e1 != "bool"){
-                        System.out.println("Error semantico: Tipo de expresion en condicion del while erroneo, debe ser bool");
-                    }
-                :}
+bucle ::= DO SEP 
+          {:
+              flagParaBreaks.push("bucle");
+          :}
+bloque WHILE SEP PAR_I expresion:e1 PAR_D PYC
+          {:
+              if (!"bool".equals(tipoDe(e1))) {
+                  System.out.println("Error: condicion del do-while debe ser booleana");
+              }
+              flagParaBreaks.pop();
+              RESULT = "";
+          :}
+
         ;
 
 // Estructura switch: evalua una expresion y ejecuta el caso que coincida.
-//Expresion solo puede ser char y int e de igual manera case x, por ejemplo x debe ser del mismo tipo 
-multi_choice ::= SWITCH SEP PAR_I expresion:e1 PAR_D LLAVE_I lista_casos:_lista_casos default_opt LLAVE_D 
-{:  
-    if (e1 != _lista_casos){
-        System.out.println("Error semantico en produccion multi_choice: El tipo a verificar en los case no son del mismo tipo que el switch");
-    }
-:}
+// Expresion solo puede ser char y int e de igual manera case x, por ejemplo x debe ser del mismo tipo 
+multi_choice ::= SWITCH SEP PAR_I expresion:e1 PAR_D
+                 {:
+                     pilaCasosSwitch.push(new HashSet<>());
+                 :}
+                LLAVE_I lista_casos:_lista_casos default_opt LLAVE_D 
+                {:  
+                    if (!tipoDe(e1).equals(tipoDe(_lista_casos))) {
+                        System.out.println("Error: tipos en case/s no coincide con el tipo indicado en el switch" + " | Linea: " + _lista_casosleft + " Columna: " + _lista_casosright);
+                    }
+                    pilaCasosSwitch.pop();
+                    RESULT = "";
+                :}
                ;
 
 // Uno o mas casos dentro de un switch.
 lista_casos ::= lista_casos:_lista_casos caso:_caso
             {:
-                if(_lista_casos.equals("error") || _caso.equals("error")){
+                String t1 = tipoDe(_lista_casos);
+                String t2 = tipoDe(_caso);
+                if ("error".equals(t1) || "error".equals(t2)) {
                     RESULT = "error";
-                }
-                else if(!_lista_casos.equals(_caso)){
-                    System.out.println("Error semantico: ");
+                } else if (!t1.equals(t2)) {
+                    System.out.println("Error: tipos inconsistentes en casos" + " | Linea: " + _casoleft + " Columna: " + _casoright );
                     RESULT = "error";
-                }
-                else{
-                    RESULT = _lista_casos;
+                } else {
+                    RESULT = _lista_casos;   // mantiene el tipo
                 }
             :}
               | caso:_caso {: RESULT = _caso; :}
               ;
 
 // Un caso individual: etiqueta literal y sus sentencias asociadas.
-caso ::= CASE SEP literal_caso:_literal_caso DOSPUNTOS sentencias 
-    {:
-        RESULT = _literal_caso;
-    :}
-    ;
+caso ::= CASE SEP literal_caso:_literal_caso DOSPUNTOS 
+         {:
+             // Verificar duplicado
+             if (!pilaCasosSwitch.isEmpty()) {
+                 HashSet<String> casosActual = pilaCasosSwitch.peek();
+                 String clave = _literal_caso;  
+                 if (casosActual.contains(clave)) {
+                     System.out.println("Error semantico: case duplicado '" + lexemaDe(clave) + "' en switch" + " | Linea: " + _literal_casoleft + " Columna: " + _literal_casoright);
+                 } else {
+                     casosActual.add(clave);
+                 }
+             }
+             flagParaBreaks.push("case");
+         :}
+        sentencias 
+         {:
+             flagParaBreaks.pop();
+             RESULT = _literal_caso;
+         :}
+        ;
 
 // Caso por defecto opcional al final del switch.
-default_opt ::= DEFAULT SEP DOSPUNTOS sentencias
+default_opt ::= DEFAULT SEP DOSPUNTOS
+                {:
+                    flagParaBreaks.push("default");
+                :}
+            sentencias
+                 {:
+                    flagParaBreaks.pop();
+                :}
               | /* vacio */
               ;
 
 // Valores literales validos como etiqueta de un caso: numero, caracter o booleano.
 literal_caso ::= numero:num1 
                 {: 
-                if (num1 =="int"){
-                    RESULT = num1; 
-                }else{
-                    RESULT = "error";
-                }
+                    RESULT = num1;   
                 :}
-               | CHAR_LIT:_char_lit {: RESULT = "char"; :}
-               | TRUE
-               | FALSE
+               | CHAR_LIT:ch 
+                {: 
+                    RESULT = ch + ":char"; 
+                :}
+               | TRUE {: RESULT = "true:bool"; :}
+               | FALSE {: RESULT = "false:bool"; :}
                ;
 
 // Instruccion de entrada: lee desde consola hacia una variable o posicion de arreglo.
 // entrada/CIN Debe permitir las funciones de leer (enteros y flotantes) 
-// No me acuerdo si el profe pidio borrar el de acceso_array por lo que lo comento por ahora
 entrada ::= CIN SEP PAR_I ID:id PAR_D 
         {:
-            if ( !tabla.buscarSimbolo(id).getTipo().equals("int") && !tabla.buscarSimbolo(id).getTipo().equals("float")){
-                System.out.println("Error semantico: Tipo de Identificador en CIN no es valido debe ser Int o Float" + "Tipo: " + tabla.buscarSimbolo(id).getTipo());
+            Simbolo s = tabla.buscarSimbolo(id);
+            if (s == null) {
+                System.out.println("Error: variable no declarada en CIN" + " | Linea: " + idleft + " Columna: " + idright);
+            } else {
+                String t = s.getTipo();
+                if (!"int".equals(t) && !"float".equals(t)) {
+                    System.out.println("Error: CIN solo admite int/float" + " | Linea: " + idleft + " Columna: " + idright);
+                }
             }
+            RESULT = "";
         :}
         ;
 
 // Instruccion de salida: imprime en consola uno o varios elementos.
-// salida estándar/COUT permite :(cadena carácter(es decir un string o bien un solo char), enteros, boolean y flotantes),
+// salida estándar/COUT permite :(cadena caracter(es decir un string o bien un solo char), enteros, boolean y flotantes),
 salida ::= COUT SEP PAR_I lista_salida PAR_D
+         {:
+             RESULT = "";
+         :}
          ;
 // Lista de elementos a imprimir, separados por coma.
 // Nota: Desd el flex se pasa como token tanto como numero entero como el flotante se pasa como "NUM" por lo que en este caso el terminal NUM corresponde a ambos
-lista_salida ::= STRING_LIT | CHAR_LIT | numero | atomo_bool | ID
-                ;
-// Un elemento de la lista de salida es cualquier expresion valida.
-// item_salida ::= expresion;
+lista_salida ::= STRING_LIT 
+                {: RESULT = "string"; :}
+               | CHAR_LIT {: RESULT = "string"; :}
+               | numero: _numero {: RESULT = _numero; :}
+               | atomo_bool: _atomo_bool {: RESULT = _atomo_bool; :}
+               | llamada_funcion
+               | acceso_array
+               | ID:id  
+                {:
+                    Simbolo s = tabla.buscarSimbolo(id);
+                    if(s == null){
+                        System.out.println("Error semantico: variable no declarada en COUT" + " | Linea: " + idleft + " Columna: " + idright);
+                        RESULT = "error";
+                    }else if(!"int".equals(s.getTipo()) && !"float".equals(s.getTipo()) && !"bool".equals(s.getTipo()) && !"char".equals(s.getTipo()) && !"string".equals(s.getTipo())){
+                        System.out.println("Error semantico: tipo no permitido en COUT" + " | Linea: " + idleft + " Columna: " + idright);
+                        RESULT = "error";
+                    }else{
+                        RESULT = s.getTipo();
+                    } 
+            :}
+               ;
 
 // Una expresion puede ser logica o un literal de cadena de texto.
-expresion ::= expr_logica:expr_log {: RESULT = expr_log; :}
-            | STRING_LIT {: RESULT = "string"; :}
+expresion ::= expr_logica:expr_log {: 
+System.out.println(expr_log);
+RESULT = expr_log; :}
+            | STRING_LIT:_string_lit {: RESULT = _string_lit + ":string"; :}
             ;
 
 // Expresion logica: conjunciones unidas opcionalmente por OR.
 expr_logica ::= expr_conjuncion:_expr_conjuncion resto_disyuncion:_resto_disyuncion
             {:
                 if("vacio".equals(_resto_disyuncion)){
-                    // No hubo OR
                     RESULT = _expr_conjuncion;
-                }else if(
-                    "bool".equals(_expr_conjuncion)
+                } else if(
+                    "bool".equals(tipoDe(_expr_conjuncion))
                     &&
-                    "bool".equals(_resto_disyuncion)
+                    "bool".equals(tipoDe(_resto_disyuncion))
                 ){
-                    RESULT = "bool";
-                }else{
-                    System.out.println("Error semantico: operacion OR invalida");
+                    String lex = "(" + lexemaDe(_expr_conjuncion) + " OR " + lexemaDe(_resto_disyuncion) + ")";
+                    RESULT = lex + ":bool";
+                } else {
+                    System.out.println("Error semantico: operacion OR invalida" + " | Linea: " + _resto_disyuncionleft + " Columna: " + _resto_disyuncionright);
                     RESULT = "error";
                 }
             :}
             ;
 
 // Parte derecha de una disyuncion: puede continuar con mas OR o terminar.
-resto_disyuncion ::= OR:or expr_conjuncion:_expr_conjuncion resto_disyuncion:_resto_disyuncion
+resto_disyuncion ::= OR expr_conjuncion:_expr_conjuncion resto_disyuncion:_resto_disyuncion
                 {:
-                    if(!"bool".equals(_expr_conjuncion)){
+                    String t1 = tipoDe(_expr_conjuncion);
+                    String t2 = tipoDe(_resto_disyuncion);
+                    if(!"bool".equals(t1)){
                         RESULT = "error";
-                    }else if(!"bool".equals(_resto_disyuncion) && !"vacio".equals(_resto_disyuncion)){
+                    } else if(!"bool".equals(t2) && !"vacio".equals(t2)){
                         RESULT = "error";
-                    }else{
-                        RESULT = "bool";
+                    } else {
+                        // Construimos lexema para el OR
+                        String lex = "(" + lexemaDe(_expr_conjuncion) + " OR " + lexemaDe(_resto_disyuncion) + ")";
+                        RESULT = lex + ":bool";
                     }
                 :}
                 | /* vacio */
@@ -676,14 +875,15 @@ expr_conjuncion ::= expr_negacion:_expr_negacion resto_conjuncion:_resto_conjunc
                 {:
                     if("vacio".equals(_resto_conjuncion)){
                         RESULT = _expr_negacion;
-                    }else if(
-                        "bool".equals(_expr_negacion)
+                    } else if(
+                        "bool".equals(tipoDe(_expr_negacion))
                         &&
-                        "bool".equals(_resto_conjuncion)
+                        "bool".equals(tipoDe(_resto_conjuncion))
                     ){
-                        RESULT = "bool";
-                    }else{
-                        System.out.println("Error semantico: operacion AND invalida");
+                        String lex = "(" + lexemaDe(_expr_negacion) + " AND " + lexemaDe(_resto_conjuncion) + ")";
+                        RESULT = lex + ":bool";
+                    } else {
+                        System.out.println("Error semantico: operacion AND invalida" + " | Linea: " + _resto_conjuncionleft + " Columna: " + _resto_conjuncionright);
                         RESULT = "error";
                     }
                 :}
@@ -692,13 +892,16 @@ expr_conjuncion ::= expr_negacion:_expr_negacion resto_conjuncion:_resto_conjunc
 // Parte derecha de una conjuncion: puede continuar con mas AND o terminar.
 resto_conjuncion ::= AND expr_negacion:_expr_negacion resto_conjuncion:_resto_conjuncion
                 {:
-                    if(!"bool".equals(_expr_negacion)){
-                        System.out.println("Error semantico: operando AND no es booleano");
+                    String t1 = tipoDe(_expr_negacion);
+                    String t2 = tipoDe(_resto_conjuncion);
+                    if(!"bool".equals(t1)){
+                        System.out.println("Error semantico: operando AND no es booleano" + " | Linea: " + _resto_conjuncionleft + " Columna: " + _resto_conjuncionright);
                         RESULT = "error";
-                    }else if(!"bool".equals(_resto_conjuncion) && !"vacio".equals(_resto_conjuncion)){
+                    } else if(!"bool".equals(t2) && !"vacio".equals(t2)){
                         RESULT = "error";
-                    }else{
-                        RESULT = "bool";
+                    } else {
+                        String lex = "(" + lexemaDe(_expr_negacion) + " AND " + lexemaDe(_resto_conjuncion) + ")";
+                        RESULT = lex + ":bool";
                     }
                 :}
                 | /* vacio */
@@ -710,11 +913,12 @@ resto_conjuncion ::= AND expr_negacion:_expr_negacion resto_conjuncion:_resto_co
 // Negacion logica: puede aplicarse repetidamente o delegar en una comparacion.
 expr_negacion ::= NOT expr_negacion:_expr_negacion
             {:
-                if(!"bool".equals(_expr_negacion)){
-                    System.out.println("Error semantico: NOT requiere expresion booleana");
+                if(!"bool".equals(tipoDe(_expr_negacion))){
+                    System.out.println("Error semantico: NOT requiere expresion booleana" + " | Linea: " + _expr_negacionleft + " Columna: " + _expr_negacionright);
                     RESULT = "error";
-                }else{
-                    RESULT = "bool";
+                } else {
+                    String lex = "NOT " + lexemaDe(_expr_negacion);
+                    RESULT = lex + ":bool";
                 }
             :}
             | comparacion:_comparacion
@@ -738,110 +942,423 @@ comparacion ::= expr_igual:_expr_igual {: RESULT = _expr_igual; :}
 // Comparaciones relacionales: cada operador se escribe como palabra clave
 // seguida de dos operandos entre parentesis.
 // Solo enteros flotantes y expresiones que puedan dar como resultado un bool.
-expr_igual        ::= EQUAL PAR_I expr_logica:_expr_logica1  COMMA expr_logica:_expr_logica2 PAR_D;
-                   // | EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+expr_igual ::= EQUAL PAR_I expr_logica:_expr_logica1 COMMA expr_logica:_expr_logica2 PAR_D
+                {:
+                    String t1 = tipoDe(_expr_logica1);
+                    String t2 = tipoDe(_expr_logica2);
+                    if(!"int".equals(t1) && !"float".equals(t1) && !"bool".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1 de igualdad" + " | Linea: " + _expr_logica1left + " Columna: " + _expr_logica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2) && !"bool".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2 de igualdad" + " | Linea: " + _expr_logica2left + " Columna: " + _expr_logica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: tipos incompatibles en igualdad" + " | Linea: " + _expr_logica2left + " Columna: " + _expr_logica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = "equal(" + lexemaDe(_expr_logica1) + "," + lexemaDe(_expr_logica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
 
-expr_n_igual      ::= N_EQUAL PAR_I expr_logica:_expr_logica1 COMMA expr_logica:_expr_logica2 PAR_D;
-                   // | N_EQUAL PAR_I atomo_bool COMMA atomo_bool PAR_D;
+expr_n_igual ::= N_EQUAL PAR_I expr_logica:_expr_logica1 COMMA expr_logica:_expr_logica2 PAR_D
+                {:
+                    String t1 = tipoDe(_expr_logica1);
+                    String t2 = tipoDe(_expr_logica2);
+                    if(!"int".equals(t1) && !"float".equals(t1) && !"bool".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1 de desigualdad" + " | Linea: " + _expr_logica1left + " Columna: " + _expr_logica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2) && !"bool".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2 de desigualdad" + " | Linea: " + _expr_logica2left + " Columna: " + _expr_logica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: tipos incompatibles en desigualdad" + " | Linea: " + _expr_logica2left + " Columna: " + _expr_logica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = "notEqual(" + lexemaDe(_expr_logica1) + "," + lexemaDe(_expr_logica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
 
 // Solo enteros y flotantes
-expr_menor        ::= LESS_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
-expr_menor_igual  ::= LESS_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
-expr_mayor        ::= GREATER_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
-expr_mayor_igual  ::= GREATER_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D;
+expr_menor ::= LESS_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D
+                {:
+                    String t1 = tipoDe(expr_aritmetica1);
+                    String t2 = tipoDe(expr_aritmetica2);
+                    if(!"int".equals(t1) && !"float".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1" + " | Linea: " + expr_aritmetica1left + " Columna: " + expr_aritmetica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: los tipos no coinciden" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = "<(" + lexemaDe(expr_aritmetica1) + "," + lexemaDe(expr_aritmetica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
+
+expr_menor_igual ::= LESS_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D
+                {:
+                    String t1 = tipoDe(expr_aritmetica1);
+                    String t2 = tipoDe(expr_aritmetica2);
+                    if(!"int".equals(t1) && !"float".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1" + " | Linea: " + expr_aritmetica1left + " Columna: " + expr_aritmetica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: los tipos no coinciden" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = "<=" + lexemaDe(expr_aritmetica1) + "," + lexemaDe(expr_aritmetica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
+
+expr_mayor ::= GREATER_T PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D
+                {:
+                    String t1 = tipoDe(expr_aritmetica1);
+                    String t2 = tipoDe(expr_aritmetica2);
+                    if(!"int".equals(t1) && !"float".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1" + " | Linea: " + expr_aritmetica1left + " Columna: " + expr_aritmetica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: los tipos no coinciden" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = ">(" + lexemaDe(expr_aritmetica1) + "," + lexemaDe(expr_aritmetica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
+
+expr_mayor_igual ::= GREATER_TE PAR_I expr_aritmetica:expr_aritmetica1 COMMA expr_aritmetica:expr_aritmetica2 PAR_D
+                {:
+                    String t1 = tipoDe(expr_aritmetica1);
+                    String t2 = tipoDe(expr_aritmetica2);
+                    if(!"int".equals(t1) && !"float".equals(t1)){
+                        System.out.println("Error semantico: tipo invalido en expresion 1" + " | Linea: " + expr_aritmetica1left + " Columna: " + expr_aritmetica1right);
+                        RESULT = "error";
+                    } else if(!"int".equals(t2) && !"float".equals(t2)){
+                        System.out.println("Error semantico: tipo invalido en expresion 2" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else if(!t1.equals(t2)){
+                        System.out.println("Error semantico: los tipos no coinciden" + " | Linea: " + expr_aritmetica2left + " Columna: " + expr_aritmetica2right);
+                        RESULT = "error";
+                    } else {
+                        String lex = ">=" + lexemaDe(expr_aritmetica1) + "," + lexemaDe(expr_aritmetica2) + ")";
+                        RESULT = lex + ":bool";
+                    }
+                :}
+                ;
 
 // Un atomo booleano es True, False, o una expresion logica entre parentesis.
-atomo_bool ::= TRUE {: RESULT = "bool"; :}
-             | FALSE {: RESULT = "bool"; :}
-             | PAR_I expr_logica:expr_log PAR_D {: RESULT = expr_log; :} 
+atomo_bool ::= TRUE 
+                {: RESULT = "true:bool"; :}
+             | FALSE 
+                {: RESULT = "false:bool"; :}
+             | PAR_I expr_logica:expr_log PAR_D 
+                {: RESULT = "(" + lexemaDe(expr_log) + "):" + tipoDe(expr_log); :} 
              ;
 
 // Expresion aritmetica: terminos unidos por suma o resta.
-expr_aritmetica ::= termino:term  resto_expresion
-                {: RESULT = term; :}
+expr_aritmetica ::= termino:_termino  resto_expresion:_resto_expresion
+                {:
+                    String tTerm = tipoDe(_termino);
+                    String tRest = tipoDe(_resto_expresion);
+                    if("vacio".equals(tRest)){
+                        RESULT = _termino;
+                    } else if(tTerm.equals(tRest) && ("int".equals(tTerm) || "float".equals(tTerm))){
+                        String lex = "(" + lexemaDe(_termino) + " + " + lexemaDe(_resto_expresion) + ")";
+                        RESULT = lex + ":" + tTerm;
+                    } else {
+                        System.out.println("Error semantico: tipos incompatibles en suma/resta" + " | Linea: " + _resto_expresionleft + " Columna: "  + _resto_expresionright);
+                        RESULT = "error";
+                    }
+                :}
                 ;
 
 
 // Parte derecha de una suma o resta: puede continuar o terminar.
-resto_expresion ::= PLUS termino resto_expresion
-                  | MINUS termino resto_expresion
-                  | /* vacio */
-                  ;
+resto_expresion ::= PLUS termino:_termino resto_expresion:_resto_expresion
+                {:
+                    String t1 = tipoDe(_termino);
+                    String t2 = tipoDe(_resto_expresion);
+                    if("vacio".equals(t2)){
+                        RESULT = _termino;
+                    } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                        String lex = "(" + lexemaDe(_termino) + " + " + lexemaDe(_resto_expresion) + ")";
+                        RESULT = lex + ":" + t1;
+                    } else {
+                        System.out.println("Error semantico: tipos incompatibles en suma" + " | Linea: " + _resto_expresionleft + " Columna: "  + _resto_expresionright);
+                        RESULT = "error";
+                    }
+                :}
+                | MINUS termino:_termino resto_expresion:_resto_expresion
+                {:
+                    String t1 = tipoDe(_termino);
+                    String t2 = tipoDe(_resto_expresion);
+                    if("vacio".equals(t2)){
+                        RESULT = _termino;
+                    } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                        String lex = "(" + lexemaDe(_termino) + " - " + lexemaDe(_resto_expresion) + ")";
+                        RESULT = lex + ":" + t1;
+                    } else {
+                        System.out.println("Error semantico: tipos incompatibles en resta" + " | Linea: " + _resto_expresionleft + " Columna: "  + _resto_expresionright);
+                        RESULT = "error";
+                    }
+                :}
+                | /* vacio */
+                {:
+                    RESULT = "vacio";
+                :}
+                ;
 
 // Un termino es una potencia seguida opcionalmente de multiplicacion, division o modulo.
-termino ::= potencia:pot resto_termino
-        {: RESULT = pot; :}
+termino ::= potencia:_potencia resto_termino:_resto_termino
+        {:
+            String tPot = tipoDe(_potencia);
+            String tRest = tipoDe(_resto_termino);
+            if("vacio".equals(tRest)){
+                RESULT = _potencia;
+            } else if(tPot.equals(tRest) && ("int".equals(tPot) || "float".equals(tPot))){
+                String lex = "(" + lexemaDe(_potencia) + " * " + lexemaDe(_resto_termino) + ")"; 
+                RESULT = lex + ":" + tPot;
+            } else {
+                System.out.println("Error semantico: tipos incompatibles en termino" + " | Linea: " +_resto_terminoleft + " Columna: "  + _resto_terminoright);
+                RESULT = "error";
+            }
+        :}
         ;
 
 // Parte derecha de un termino: puede continuar con mas operaciones o terminar.
-resto_termino ::= MULT potencia resto_termino
-                | DIV potencia resto_termino
-                | MOD potencia resto_termino
-                | /* vacio */
-                ;
+resto_termino ::= MULT potencia:_potencia resto_termino:_resto_termino
+            {:
+                String t1 = tipoDe(_potencia);
+                String t2 = tipoDe(_resto_termino);
+                if("vacio".equals(t2)){
+                    RESULT = _potencia;
+                } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                    String lex = "(" + lexemaDe(_potencia) + " * " + lexemaDe(_resto_termino) + ")";
+                    RESULT = lex + ":" + t1;
+                } else {
+                    System.out.println("Error semantico: tipos incompatibles en multiplicacion" + " | Linea: " +_resto_terminoleft + " Columna: "  + _resto_terminoright);
+                    RESULT = "error";
+                }
+            :}
+            | DIV potencia:_potencia resto_termino:_resto_termino
+            {:
+                String t1 = tipoDe(_potencia);
+                String t2 = tipoDe(_resto_termino);
+                if("vacio".equals(t2)){
+                    RESULT = _potencia;
+                } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                    String lex = "(" + lexemaDe(_potencia) + " / " + lexemaDe(_resto_termino) + ")";
+                    RESULT = lex + ":" + t1;
+                } else {
+                    System.out.println("Error semantico: tipos incompatibles en division" + " | Linea: " +_resto_terminoleft + " Columna: "  + _resto_terminoright);
+                    RESULT = "error";
+                }
+            :}
+            | MOD potencia:_potencia resto_termino:_resto_termino
+            {:
+                String t1 = tipoDe(_potencia);
+                String t2 = tipoDe(_resto_termino);
+                if("vacio".equals(t2)){
+                    RESULT = _potencia;
+                } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                    String lex = "(" + lexemaDe(_potencia) + " % " + lexemaDe(_resto_termino) + ")";
+                    RESULT = lex + ":" + t1;
+                } else {
+                    System.out.println("Error semantico: tipos incompatibles en modulo"  + " | Linea: " +_resto_terminoleft + " Columna: "  + _resto_terminoright);
+                    RESULT = "error";
+                }
+            :}
+            | /* vacio */
+            {:
+                RESULT = "vacio";
+            :}
+            ;
 
 // Una potencia es un factor que puede elevarse a otro factor.
-potencia ::= factor:fact resto_potencia
-        {: RESULT = fact; :}
-         ;
+potencia ::= factor:_factor resto_potencia:_resto_potencia
+        {:
+            String tFact = tipoDe(_factor);
+            String tRest = tipoDe(_resto_potencia);
+            if("vacio".equals(tRest)){
+                RESULT = _factor;
+            } else if(tFact.equals(tRest) && ("int".equals(tFact) || "float".equals(tFact))){
+                String lex = "(" + lexemaDe(_factor) + " ^ " + lexemaDe(_resto_potencia) + ")";
+                RESULT = lex + ":" + tFact;
+            } else {
+                System.out.println("Error semantico: tipos incompatibles en potencia" + " | Linea: " + _resto_potencialeft + " Columna: " + _resto_potenciaright);
+                RESULT = "error";
+            }
+        :}
+        ;
 
 // Parte derecha de una potencia: puede encadenarse o terminar.
-resto_potencia ::= POW factor resto_potencia
-                 | /* vacio */
-                 ;
+resto_potencia ::= POW factor:_factor resto_potencia:_resto_potencia
+            {:
+                String t1 = tipoDe(_factor);
+                String t2 = tipoDe(_resto_potencia);
+                if("vacio".equals(t2)){
+                    RESULT = _factor;
+                } else if(t1.equals(t2) && ("int".equals(t1) || "float".equals(t1))){
+                    String lex = "(" + lexemaDe(_factor) + " ^ " + lexemaDe(_resto_potencia) + ")";
+                    RESULT = lex + ":" + t1;
+                } else {
+                    System.out.println("Error semantico: tipos incompatibles en potencia" + " | Linea: " + _resto_potencialeft + " Columna: " + _resto_potenciaright);
+                    RESULT = "error";
+                }
+            :}
+            | /* vacio */
+            {:
+                RESULT = "vacio";
+            :}
+            ;
 
 // Un factor es la unidad basica de una expresion aritmetica.
 // Puede ser un valor negado, un numero, un identificador, un caracter,
 // un acceso a arreglo, una llamada a funcion o una expresion entre parentesis.
-factor ::= unario
-         | numero: numero1 {: 
-         
-         RESULT = numero1; :}
+factor ::= unario:un
+         | numero:num
+         {: 
+            RESULT = num; 
+         :}
          | ID:id 
         {: 
             Simbolo s = tabla.buscarSimbolo(id);
             if(s != null){
-                RESULT = s.getTipo();
+                RESULT = id + ":" + s.getTipo();
             } else {
-                System.out.println("Error semantico: variable no declarada");
+                System.out.println("Error semantico: variable no declarada"+ " | Linea: " + idleft + " Columna: " + idright);
                 RESULT = "error";
             }
         :}
-         | CHAR_LIT:char1 {: RESULT = "char"; :}
-         | acceso_array
-         | llamada_funcion:llamada_fun {: RESULT = llamada_fun;  :}
-         | PAR_I expr_aritmetica PAR_D
+         | CHAR_LIT:_char_lit
+         {: 
+            RESULT = _char_lit + ":char"; 
+         :}
+         | acceso_array:_acceso_array 
+         {: 
+            RESULT = _acceso_array; 
+         :}
+         | llamada_funcion:_llamada_funcion 
+         {: 
+            RESULT = _llamada_funcion; 
+         :}
+         | PAR_I expr_aritmetica:_expr_aritmetica PAR_D 
+         {: 
+            RESULT = "(" + lexemaDe(_expr_aritmetica) + "):" + tipoDe(_expr_aritmetica); 
+         :}
          ;
 
 // Operadores unarios: negacion de numero, incremento o decremento prefijo.
-unario ::= MINUS numero
-         | INC ID
-         | DEC ID
-         ;
+unario ::= MINUS numero:_numero
+        {:
+            if(!"int".equals(tipoDe(_numero)) && !"float".equals(tipoDe(_numero))){
+                System.out.println("Error semantico: operador '-' requiere numero" + " | Linea: " + _numeroleft + " Columna: " + _numeroright);
+                RESULT = "error";
+            } else {
+                String lex = "-" + lexemaDe(_numero);
+                RESULT = lex + ":" + tipoDe(_numero);
+            }
+        :}
+        | INC ID:id
+        {:
+            Simbolo s = tabla.buscarSimbolo(id);
+            if(s == null){
+                System.out.println("Error semantico: variable no declarada" + " | Linea: " + idleft + " Columna: " + idright);
+                RESULT = "error";
+            } else if(!"int".equals(s.getTipo()) && !"float".equals(s.getTipo())){
+                System.out.println("Error semantico: ++ requiere variable numerica" + " | Linea: " + idleft + " Columna: " + idright);
+                RESULT = "error";
+            } else {
+                String lex = "++" + id;
+                RESULT = lex + ":" + s.getTipo();
+            }
+        :}
+        | DEC ID:id
+        {:
+            Simbolo s = tabla.buscarSimbolo(id);
+            if(s == null){
+                System.out.println("Error semantico: variable no declarada" + " | Linea: " + idleft + " Columna: " + idright);
+                RESULT = "error";
+            } else if(!"int".equals(s.getTipo()) && !"float".equals(s.getTipo())){
+                System.out.println("Error semantico: -- requiere variable numerica" + " | Linea: " + idleft + " Columna: " + idright);
+                RESULT = "error";
+            } else {
+                String lex = "--" + id;
+                RESULT = lex + ":" + s.getTipo();
+            }
+        :}
+        ;
 
 // Literales numericos en sus distintos formatos.
-numero ::= INT_LIT:int_l {: RESULT = "int"; :}
-         | FLOAT_LIT:float_l {: RESULT = "float"; :}
-         | FRAC_LIT
-         | EXPINT_LIT
-
+numero ::= INT_LIT:int_l {: RESULT = int_l + ":int"; :}
+         | FLOAT_LIT:float_l {: RESULT = float_l + ":float"; :}
+         | FRAC_LIT {: RESULT = "float"; :}
+         | EXPINT_LIT {: RESULT = "float"; :}
          ;
 
 // Llamada a una funcion: nombre seguido de argumentos entre parentesis.
 // La segunda alternativa permite recuperarse si los argumentos estan malformados.
-llamada_funcion ::= ID:id PAR_I argumentos PAR_D 
+llamada_funcion ::= ID:id PAR_I argumentos:args PAR_D 
                 {:
-                 //Aca validar que la cantidad de argumentos sean los correctos.
-                 RESULT = tabla.buscarSimbolo(id).getTipo();   
+                    Simbolo s = tabla.buscarSimbolo(id);
+                    if (s == null) {
+                        System.out.println("Error semantico: funcion no declarada: " + id + " | Linea: " + idleft + " Columna: " + idright);
+                        RESULT = "error";
+                    } else {
+                        String tiposEsperados = s.getParametros();  
+                        String tiposRecibidos = args;
+                        if (tiposEsperados == null){
+                            tiposEsperados = "";
+                        }
+                        if (tiposRecibidos == null){
+                            tiposRecibidos = "";
+                        }
+                        if (!tiposEsperados.equals(tiposRecibidos)) {
+                            System.out.println("Error semantico: la funcion " + id + " esperaba parametros (" + tiposEsperados + ") pero se recibieron (" + tiposRecibidos + ")" + " | Linea: " + argsleft + " Columna: " + argsright);
+                            RESULT = "error";
+                        } else {
+                            RESULT = id + ":" + s.getTipo();   // "lex:tipo"
+                        }
+                    }
                 :}
-                  | ID PAR_I error PAR_D
-                  ;
+                | ID PAR_I error PAR_D
+                {:
+                    RESULT = "error";
+                :}
+                ;
 
 // Lista de argumentos de una llamada: puede estar vacia, tener uno o varios separados por coma.
-argumentos ::= argumentos COMMA expresion
-             | expresion
-             | /* vacio */
-             ;
+argumentos ::= argumentos:args COMMA expresion:e
+            {:
+                String tipoArg = tipoDe(e);
+                RESULT = args + "," + tipoArg;
+            :}
+            | expresion:e
+            {:
+                RESULT = tipoDe(e);
+            :}
+            | /* vacio */
+            {:
+                RESULT = "";
+            :}
+            ;
 
 // Todos los tipos de datos validos en el lenguaje para declaraciones y parametros.
 tipo ::= INT       {: RESULT = "int";    :}
